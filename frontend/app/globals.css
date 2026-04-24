@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171411;
+  --card: rgba(255, 255, 255, 0.96);
+  --card-foreground: #171411;
+  --muted: #f6f6f4;
+  --muted-foreground: #6b6258;
+  --primary: #1f1d1a;
+  --primary-foreground: #f8f4ee;
+  --secondary: #d7a25b;
+  --secondary-foreground: #201a14;
+  --accent: #eef3ee;
+  --accent-foreground: #1f2b22;
+  --border: rgba(43, 35, 27, 0.08);
+  --ring: rgba(31, 29, 26, 0.32);
+  --success: #2f8f62;
+  --danger: #ba4a45;
+  --warning: #d28a1e;
+  --shadow: 0 20px 48px rgba(36, 28, 18, 0.06);
+  --radius: 1.25rem;
+}
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-plex-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 10px);
+  --radius-md: calc(var(--radius) - 6px);
+  --radius-lg: var(--radius);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100%;
+  background: #ffffff;
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.glass-panel {
+  background: var(--card);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+}
+
+.page-grid {
+  position: relative;
+}
+
+.page-grid::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(31, 29, 26, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 29, 26, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 75%);
+  pointer-events: none;
+}

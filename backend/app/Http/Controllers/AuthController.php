@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -25,6 +26,8 @@ class AuthController extends Controller
             'niveau_acces' => ['nullable', 'string', 'max:255'],
             'date_naissance' => ['nullable', 'date'],
             'adresse' => ['nullable', 'string', 'max:255'],
+            'avatar_url' => ['nullable', 'url', 'max:2048'],
+            'avatar_image' => ['nullable', 'image', 'max:2048'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
@@ -39,6 +42,9 @@ class AuthController extends Controller
             'phone' => $validated['phone'] ?? null,
             'role' => $validated['role'],
             'status' => $this->defaultStatusFor($validated['role']),
+            'avatar_url' => $request->hasFile('avatar_image')
+                ? url(Storage::url($request->file('avatar_image')->store('avatars', 'public')))
+                : ($validated['avatar_url'] ?? null),
             'password' => $validated['password'],
         ]);
 

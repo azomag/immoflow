@@ -48,6 +48,7 @@ export type UserRecord = {
   phone: string | null;
   role: AppRole;
   status: AccountStatus;
+  avatar_url?: string | null;
   managed_by_id: number | null;
   created_at: string;
   last_login_at: string | null;
@@ -73,8 +74,17 @@ export type TypeLogement = {
 export type Logement = {
   id: number;
   adresse: string;
+  titre: string | null;
+  description: string | null;
   superficie: string;
   loyer: string;
+  chambres: number | null;
+  salles_bain: number | null;
+  etage: string | null;
+  parking: boolean;
+  chauffage: string | null;
+  statut_publication: string;
+  images: string[] | null;
   commune: Commune;
   type_logement: TypeLogement;
   agent: {
@@ -113,6 +123,16 @@ export type Paiement = {
   contrat: Contrat;
 };
 
+export type NotificationRecord = {
+  id: number;
+  subject: string;
+  message: string;
+  read_at: string | null;
+  created_at: string;
+  sender: Pick<AuthenticatedUser, "id" | "name" | "email" | "role" | "avatar_url">;
+  recipient: Pick<AuthenticatedUser, "id" | "name" | "email" | "role" | "avatar_url">;
+};
+
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
 export function getApiBaseUrl(): string {
@@ -131,7 +151,7 @@ export async function backendRequest<T>(
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
-  const hasBody = init.body !== undefined && !headers.has("Content-Type");
+  const hasBody = init.body !== undefined && !headers.has("Content-Type") && !(init.body instanceof FormData);
   if (hasBody) {
     headers.set("Content-Type", "application/json");
   }
@@ -171,6 +191,7 @@ export async function registerWithBackend(payload: {
   niveau_acces?: string;
   date_naissance?: string;
   adresse?: string;
+  avatar_url?: string;
   role: Exclude<AppRole, "super_admin">;
   password: string;
   password_confirmation: string;
@@ -178,6 +199,13 @@ export async function registerWithBackend(payload: {
   return backendRequest<AuthResponse>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function registerFormWithBackend(payload: FormData): Promise<AuthResponse> {
+  return backendRequest<AuthResponse>("/api/auth/register", {
+    method: "POST",
+    body: payload,
   });
 }
 

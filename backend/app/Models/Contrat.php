@@ -21,6 +21,8 @@ class Contrat extends Model
         'date_fin',
         'montant',
         'statut',
+        'signature_status',
+        'signed_at',
     ];
 
     /**

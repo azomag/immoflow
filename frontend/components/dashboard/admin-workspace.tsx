@@ -8,7 +8,9 @@ import {
   CalendarDays,
   ChevronLeft,
   CircleHelp,
+  CreditCard,
   Ellipsis,
+  FileText,
   Landmark,
   LayoutGrid,
   Mail,
@@ -18,6 +20,7 @@ import {
   Share2,
   ShieldCheck,
   UserCog,
+  UserPlus,
   Users,
 } from "lucide-react";
 import type {
@@ -26,11 +29,15 @@ import type {
   Commune,
   Contrat,
   Logement,
+  NotificationRecord,
   Paiement,
   TypeLogement,
   UserRecord,
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { AvatarMenu } from "@/components/dashboard/avatar-menu";
+import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
+import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,12 +62,13 @@ type AdminWorkspaceProps = {
   logements: Logement[];
   contrats: Contrat[];
   paiements: Paiement[];
+  notifications: NotificationRecord[];
   communes: Commune[];
   types: TypeLogement[];
   reload: () => Promise<void>;
 };
 
-type AdminTab = "dashboard" | "properties" | "tenants" | "users" | "settings";
+type AdminTab = "dashboard" | "properties" | "contracts" | "payments" | "tenants" | "users" | "notifications" | "profile" | "settings";
 type UserView = "agents" | "locataires" | "admins";
 
 function emptyPropertyForm() {
@@ -69,8 +77,17 @@ function emptyPropertyForm() {
     type_logement_id: "",
     commune_id: "",
     adresse: "",
+    titre: "",
+    description: "",
     superficie: "",
     loyer: "",
+    chambres: "",
+    salles_bain: "",
+    etage: "",
+    parking: false,
+    chauffage: "",
+    statut_publication: "listed",
+    images_text: "",
   };
 }
 
@@ -82,6 +99,7 @@ export function AdminWorkspace({
   logements,
   contrats,
   paiements,
+  notifications,
   communes,
   types,
   reload,
@@ -113,6 +131,39 @@ export function AdminWorkspace({
     date_paiement: new Date().toISOString().slice(0, 10),
     mode: "Virement",
     statut: "paid",
+  });
+  const [contractForm, setContractForm] = useState({
+    agent_id: "",
+    locataire_id: "",
+    logement_id: "",
+    date_debut: "",
+    date_fin: "",
+    montant: "",
+    statut: "active",
+  });
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    login: "",
+    role: role === "super_admin" ? "admin" : "agent",
+    status: "active",
+    code_agent: "",
+    niveau_acces: "admin",
+    date_naissance: "",
+    adresse: "",
+    password: "",
+    password_confirmation: "",
+  });
+  const [profileForm, setProfileForm] = useState({
+    name: user.name,
+    email: user.email,
+    phone: user.phone ?? "",
+    login: user.login ?? "",
+    avatar_url: user.avatar_url ?? "",
+    current_password: "",
+    password: "",
+    password_confirmation: "",
   });
 
   const agentUsers = useMemo(
@@ -188,6 +239,26 @@ export function AdminWorkspace({
     () => contrats.filter((contrat) => contrat.statut.toLowerCase() === "active").length,
     [contrats],
   );
+
+  const expectedRevenue = useMemo(
+    () =>
+      contrats
+        .filter((contrat) => contrat.statut.toLowerCase() === "active")
+        .reduce((total, contrat) => total + Number.parseFloat(contrat.montant || "0"), 0),
+    [contrats],
+  );
+
+  const overdueBalance = useMemo(
+    () =>
+      paiements
+        .filter((paiement) => paiement.statut.toLowerCase() !== "paid")
+        .reduce((total, paiement) => total + Number.parseFloat(paiement.montant || "0"), 0),
+    [paiements],
+  );
+
+  const collectionRate = expectedRevenue > 0
+    ? Math.min(100, Math.round((collectionsTotal / expectedRevenue) * 1000) / 10)
+    : 0;
 
   const recentActivity = useMemo(() => {
     const items = [
@@ -299,8 +370,17 @@ export function AdminWorkspace({
       type_logement_id: String(snapshot.logement.type_logement.id),
       commune_id: String(snapshot.logement.commune.id),
       adresse: snapshot.logement.adresse,
+      titre: snapshot.logement.titre ?? "",
+      description: snapshot.logement.description ?? "",
       superficie: snapshot.logement.superficie,
       loyer: snapshot.logement.loyer,
+      chambres: snapshot.logement.chambres ? String(snapshot.logement.chambres) : "",
+      salles_bain: snapshot.logement.salles_bain ? String(snapshot.logement.salles_bain) : "",
+      etage: snapshot.logement.etage ?? "",
+      parking: snapshot.logement.parking ?? false,
+      chauffage: snapshot.logement.chauffage ?? "",
+      statut_publication: snapshot.logement.statut_publication ?? "listed",
+      images_text: (snapshot.logement.images ?? []).join("\n"),
     });
   }
 
@@ -310,8 +390,17 @@ export function AdminWorkspace({
       type_logement_id: Number(propertyForm.type_logement_id),
       commune_id: Number(propertyForm.commune_id),
       adresse: propertyForm.adresse,
+      titre: propertyForm.titre || null,
+      description: propertyForm.description || null,
       superficie: Number(propertyForm.superficie),
       loyer: Number(propertyForm.loyer),
+      chambres: propertyForm.chambres ? Number(propertyForm.chambres) : null,
+      salles_bain: propertyForm.salles_bain ? Number(propertyForm.salles_bain) : null,
+      etage: propertyForm.etage || null,
+      parking: propertyForm.parking,
+      chauffage: propertyForm.chauffage || null,
+      statut_publication: propertyForm.statut_publication,
+      images: propertyForm.images_text.split("\n").map((entry) => entry.trim()).filter(Boolean),
     };
 
     await runMutation(async () => {
@@ -393,6 +482,96 @@ export function AdminWorkspace({
     });
   }
 
+  async function handleContractSubmit() {
+    await runMutation(async () => {
+      await backendRequest("/api/contrats", {
+        method: "POST",
+        body: JSON.stringify({
+          agent_id: Number(contractForm.agent_id),
+          locataire_id: Number(contractForm.locataire_id),
+          logement_id: Number(contractForm.logement_id),
+          date_debut: contractForm.date_debut,
+          date_fin: contractForm.date_fin || null,
+          montant: Number(contractForm.montant),
+          statut: contractForm.statut,
+        }),
+      }, token);
+
+      setContractForm({
+        agent_id: "",
+        locataire_id: "",
+        logement_id: "",
+        date_debut: "",
+        date_fin: "",
+        montant: "",
+        statut: "active",
+      });
+      setNotice("Contract created.");
+    });
+  }
+
+  async function handleCreateUser() {
+    await runMutation(async () => {
+      await backendRequest("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          name: userForm.name,
+          email: userForm.email,
+          phone: userForm.phone || null,
+          login: userForm.login || undefined,
+          role: userForm.role,
+          status: userForm.status,
+          code_agent: userForm.role === "agent" ? userForm.code_agent || undefined : undefined,
+          niveau_acces: userForm.role === "admin" ? userForm.niveau_acces : undefined,
+          date_naissance: userForm.role === "locataire" ? userForm.date_naissance || undefined : undefined,
+          adresse: userForm.role === "locataire" ? userForm.adresse || undefined : undefined,
+          password: userForm.password,
+          password_confirmation: userForm.password_confirmation,
+        }),
+      }, token);
+
+      setUserForm((current) => ({
+        ...current,
+        name: "",
+        email: "",
+        phone: "",
+        login: "",
+        code_agent: "",
+        date_naissance: "",
+        adresse: "",
+        password: "",
+        password_confirmation: "",
+      }));
+      setNotice("User created.");
+    });
+  }
+
+  async function handleProfileSubmit() {
+    await runMutation(async () => {
+      await backendRequest("/api/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: profileForm.name,
+          email: profileForm.email,
+          phone: profileForm.phone || null,
+          login: profileForm.login || undefined,
+          avatar_url: profileForm.avatar_url || null,
+          current_password: profileForm.current_password || undefined,
+          password: profileForm.password || undefined,
+          password_confirmation: profileForm.password_confirmation || undefined,
+        }),
+      }, token);
+
+      setProfileForm((current) => ({
+        ...current,
+        current_password: "",
+        password: "",
+        password_confirmation: "",
+      }));
+      setNotice("Profile updated. Sign out and in again to refresh the header identity.");
+    });
+  }
+
   function handleShareProperty(snapshot: (typeof propertySnapshots)[number]) {
     const text = `${snapshot.logement.adresse} • ${snapshot.logement.commune.nom} • ${formatMoney(
       snapshot.logement.loyer,
@@ -435,8 +614,12 @@ export function AdminWorkspace({
   const navItems: Array<{ id: AdminTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
     { id: "properties", label: "Properties", icon: Building2 },
+    { id: "contracts", label: "Contracts", icon: FileText },
+    { id: "payments", label: "Payments", icon: CreditCard },
     { id: "tenants", label: "Tenants", icon: Users },
     { id: "users", label: "User Management", icon: UserCog },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "profile", label: "Profile", icon: UserCog },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -515,10 +698,7 @@ export function AdminWorkspace({
               <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
                 <CircleHelp className="h-5 w-5" />
               </button>
-              <Avatar className="h-11 w-11 border border-black/8">
-                <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
-                <AvatarFallback>{initials(user.name)}</AvatarFallback>
-              </Avatar>
+              <AvatarMenu user={user} onProfile={() => openTab("profile")} />
             </div>
           </header>
 
@@ -1300,6 +1480,337 @@ export function AdminWorkspace({
               </section>
             ) : null}
 
+            {activeTab === "contracts" ? (
+              <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+                <div className="space-y-6">
+                  <div>
+                    <h1 className="text-[42px] font-semibold tracking-tight">
+                      Contracts <span className="align-middle text-base font-medium uppercase tracking-[0.18em] text-black/45">{activeContractsCount} active</span>
+                    </h1>
+                    <p className="mt-2 text-black/55">Review and create lease agreements across the portfolio.</p>
+                  </div>
+
+                  <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
+                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Ref</div>
+                      <div>Tenant</div>
+                      <div>Property</div>
+                      <div>Start</div>
+                      <div>End</div>
+                      <div>Rent</div>
+                    </div>
+                    {contrats.map((contrat) => (
+                      <div
+                        key={contrat.id}
+                        className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
+                        <div className="self-center font-mono text-sm text-black/60">CTR-{String(contrat.id).padStart(4, "0")}</div>
+                        <div className="self-center font-semibold">{contrat.locataire.user.name}</div>
+                        <div className="self-center text-black/70">{contrat.logement.adresse}</div>
+                        <div className="self-center text-black/55">{formatShortDate(contrat.date_debut)}</div>
+                        <div className="self-center text-black/55">{formatShortDate(contrat.date_fin)}</div>
+                        <div className="self-center">{formatMoney(contrat.montant)} MAD</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[24px] font-semibold">New Contract</div>
+                      <div className="mt-1 text-sm font-semibold uppercase tracking-[0.2em] text-black/35">Draft CTR</div>
+                    </div>
+                    <FileText className="h-5 w-5 text-black/45" />
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    <div className="space-y-2">
+                      <Label>Agent</Label>
+                      <select
+                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                        value={contractForm.agent_id}
+                        onChange={(event) =>
+                          setContractForm((current) => ({ ...current, agent_id: event.target.value }))
+                        }
+                      >
+                        <option value="">Select agent</option>
+                        {agentUsers.map((entry) => (
+                          <option key={entry.id} value={entry.agent_profile?.id ?? ""}>
+                            {entry.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Primary tenant</Label>
+                      <select
+                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                        value={contractForm.locataire_id}
+                        onChange={(event) =>
+                          setContractForm((current) => ({ ...current, locataire_id: event.target.value }))
+                        }
+                      >
+                        <option value="">Select tenant</option>
+                        {tenantUsers.map((entry) => (
+                          <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
+                            {entry.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Property</Label>
+                      <select
+                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                        value={contractForm.logement_id}
+                        onChange={(event) => {
+                          const selected = logements.find((entry) => String(entry.id) === event.target.value);
+                          setContractForm((current) => ({
+                            ...current,
+                            logement_id: event.target.value,
+                            agent_id: selected ? String(selected.agent.id) : current.agent_id,
+                            montant: selected?.loyer ?? current.montant,
+                          }));
+                        }}
+                      >
+                        <option value="">Select property</option>
+                        {logements.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {entry.adresse} • {entry.commune.nom}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Start date</Label>
+                        <Input
+                          type="date"
+                          value={contractForm.date_debut}
+                          onChange={(event) =>
+                            setContractForm((current) => ({ ...current, date_debut: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End date</Label>
+                        <Input
+                          type="date"
+                          value={contractForm.date_fin}
+                          onChange={(event) =>
+                            setContractForm((current) => ({ ...current, date_fin: event.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-[20px] bg-[#f6f6f4] p-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-black/45">Financial terms</div>
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Monthly rent</Label>
+                          <Input
+                            type="number"
+                            value={contractForm.montant}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, montant: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={contractForm.statut}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, statut: event.target.value }))
+                            }
+                          >
+                            <option value="active">Active</option>
+                            <option value="pending">Pending</option>
+                            <option value="expired">Expired</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleContractSubmit()}>
+                      Create Contract
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeTab === "payments" ? (
+              <section className="space-y-8">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <h1 className="text-[42px] font-semibold tracking-tight">Payments</h1>
+                    <p className="mt-2 text-black/55">Validate rent collection and record incoming payments.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() =>
+                      downloadTextFile(
+                        "payments.csv",
+                        ["Tenant,Property,Amount,Date,Mode,Status"]
+                          .concat(
+                            paiements.map((paiement) =>
+                              [
+                                paiement.contrat.locataire.user.name,
+                                paiement.contrat.logement.adresse,
+                                paiement.montant,
+                                paiement.date_paiement,
+                                paiement.mode,
+                                paiement.statut,
+                              ].join(","),
+                            ),
+                          )
+                          .join("\n"),
+                      )
+                    }
+                  >
+                    Export CSV
+                  </Button>
+                </div>
+
+                <div className="grid gap-5 xl:grid-cols-4">
+                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                    <div className="text-sm text-black/60">Expected Revenue</div>
+                    <div className="mt-2 text-3xl font-semibold">{formatMoney(expectedRevenue)} MAD</div>
+                  </div>
+                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                    <div className="text-sm text-black/60">Collected Amount</div>
+                    <div className="mt-2 text-3xl font-semibold">{formatMoney(collectionsTotal)} MAD</div>
+                  </div>
+                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                    <div className="text-sm text-black/60">Open Balance</div>
+                    <div className="mt-2 text-3xl font-semibold text-[var(--danger)]">{formatMoney(overdueBalance)} MAD</div>
+                  </div>
+                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                    <div className="text-sm text-black/60">Collection Rate</div>
+                    <div className="mt-2 text-3xl font-semibold">{collectionRate}%</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
+                    <div className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Tenant</div>
+                      <div>Property</div>
+                      <div>Paid</div>
+                      <div>Date</div>
+                      <div>Status</div>
+                    </div>
+                    {paiements.map((paiement) => (
+                      <div
+                        key={paiement.id}
+                        className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
+                        <div className="self-center font-semibold">{paiement.contrat.locataire.user.name}</div>
+                        <div className="self-center text-black/65">{paiement.contrat.logement.adresse}</div>
+                        <div className="self-center">{formatMoney(paiement.montant)} MAD</div>
+                        <div className="self-center text-black/55">{formatShortDate(paiement.date_paiement)}</div>
+                        <div className="self-center">
+                          <Badge variant={toneForStatus(paiement.statut)}>{paiement.statut}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                    <div className="text-[22px] font-semibold">Register Payment</div>
+                    <div className="mt-6 space-y-4">
+                      <div className="space-y-2">
+                        <Label>Contract</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={paymentForm.contrat_id}
+                          onChange={(event) => {
+                            const selected = contrats.find((entry) => String(entry.id) === event.target.value);
+                            setPaymentForm((current) => ({
+                              ...current,
+                              contrat_id: event.target.value,
+                              montant: selected?.montant ?? current.montant,
+                            }));
+                          }}
+                        >
+                          <option value="">Select contract</option>
+                          {contrats.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.locataire.user.name} • {entry.logement.adresse}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Received amount</Label>
+                          <Input
+                            type="number"
+                            value={paymentForm.montant}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, montant: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Payment date</Label>
+                          <Input
+                            type="date"
+                            value={paymentForm.date_paiement}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, date_paiement: event.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Method</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={paymentForm.mode}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, mode: event.target.value }))
+                            }
+                          >
+                            <option value="Virement">Bank Transfer</option>
+                            <option value="Card">Credit Card</option>
+                            <option value="Check">Check</option>
+                            <option value="Cash">Cash</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={paymentForm.statut}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, statut: event.target.value }))
+                            }
+                          >
+                            <option value="paid">Paid</option>
+                            <option value="partial">Partial</option>
+                            <option value="pending">Pending</option>
+                          </select>
+                        </div>
+                      </div>
+                      <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleRecordPayment()}>
+                        Confirm Payment
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             {activeTab === "tenants" ? (
               <section className="space-y-6">
                 <div>
@@ -1401,10 +1912,183 @@ export function AdminWorkspace({
                   ))}
 
                   <div className="ml-auto">
-                    <Button className="rounded-2xl" onClick={() => window.open("/signup", "_blank", "noopener,noreferrer")}>
+                    <Button className="rounded-2xl" onClick={() => setUserForm((current) => ({ ...current, role: role === "super_admin" ? "admin" : "agent" }))}>
                       <Plus className="h-4 w-4" />
                       Invite New User
                     </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-black/6 bg-white p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white">
+                      <UserPlus className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-[22px] font-semibold">Add user or agent</div>
+                      <div className="text-sm text-black/50">
+                        {role === "super_admin"
+                          ? "Create administrator accounts for the organization."
+                          : "Create agent and tenant accounts without leaving the dashboard."}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 xl:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label>Role</Label>
+                      <select
+                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                        value={userForm.role}
+                        onChange={(event) =>
+                          setUserForm((current) => ({ ...current, role: event.target.value }))
+                        }
+                      >
+                        {role === "super_admin" ? (
+                          <option value="admin">Admin</option>
+                        ) : (
+                          <>
+                            <option value="agent">Agent</option>
+                            <option value="locataire">Tenant</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Full name</Label>
+                      <Input
+                        value={userForm.name}
+                        onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="Sarah Chen"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        value={userForm.email}
+                        onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
+                        placeholder="name@immoflow.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input
+                        value={userForm.phone}
+                        onChange={(event) => setUserForm((current) => ({ ...current, phone: event.target.value }))}
+                        placeholder="+212 6 00 00 00 00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label>Username</Label>
+                      <Input
+                        value={userForm.login}
+                        onChange={(event) => setUserForm((current) => ({ ...current, login: event.target.value }))}
+                        placeholder="sarah.chen"
+                      />
+                    </div>
+                    {userForm.role === "agent" ? (
+                      <div className="space-y-2">
+                        <Label>Agent code</Label>
+                        <Input
+                          value={userForm.code_agent}
+                          onChange={(event) =>
+                            setUserForm((current) => ({ ...current, code_agent: event.target.value }))
+                          }
+                          placeholder="AGT-00024"
+                        />
+                      </div>
+                    ) : null}
+                    {userForm.role === "admin" ? (
+                      <div className="space-y-2">
+                        <Label>Access level</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={userForm.niveau_acces}
+                          onChange={(event) =>
+                            setUserForm((current) => ({ ...current, niveau_acces: event.target.value }))
+                          }
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="manager">Manager</option>
+                          <option value="support">Support</option>
+                        </select>
+                      </div>
+                    ) : null}
+                    {userForm.role === "locataire" ? (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Birth date</Label>
+                          <Input
+                            type="date"
+                            value={userForm.date_naissance}
+                            onChange={(event) =>
+                              setUserForm((current) => ({ ...current, date_naissance: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Address</Label>
+                          <Input
+                            value={userForm.adresse}
+                            onChange={(event) =>
+                              setUserForm((current) => ({ ...current, adresse: event.target.value }))
+                            }
+                            placeholder="Residence address"
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <select
+                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                        value={userForm.status}
+                        onChange={(event) =>
+                          setUserForm((current) => ({ ...current, status: event.target.value }))
+                        }
+                      >
+                        <option value="active">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+                    <div className="space-y-2">
+                      <Label>Password</Label>
+                      <Input
+                        type="password"
+                        value={userForm.password}
+                        onChange={(event) =>
+                          setUserForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                        placeholder="Minimum 8 characters"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Confirm password</Label>
+                      <Input
+                        type="password"
+                        value={userForm.password_confirmation}
+                        onChange={(event) =>
+                          setUserForm((current) => ({
+                            ...current,
+                            password_confirmation: event.target.value,
+                          }))
+                        }
+                        placeholder="Repeat password"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button className="h-12 w-full rounded-2xl" disabled={busy} onClick={() => void handleCreateUser()}>
+                        Create User
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -1468,6 +2152,220 @@ export function AdminWorkspace({
                       </div>
                     );
                   })}
+                </div>
+              </section>
+            ) : null}
+
+            {activeTab === "notifications" ? (
+              <NotificationsPanel
+                token={token}
+                user={user}
+                users={users}
+                notifications={notifications}
+                reload={reload}
+              />
+            ) : null}
+
+            {activeTab === "profile" ? (
+              <ProfilePanel token={token} user={user} onSaved={reload} />
+            ) : null}
+
+            {false && activeTab === "profile" ? (
+              <section className="space-y-7">
+                <div className="flex flex-wrap items-center gap-8 border-b border-black/8 pb-5">
+                  <h1 className="text-[28px] font-semibold tracking-tight">Profile</h1>
+                  {["Profile", "Security", "Notifications", "Appearance"].map((entry, index) => (
+                    <span
+                      key={entry}
+                      className={`pb-4 text-[15px] ${index === 0 ? "border-b-2 border-black font-semibold text-black" : "text-black/55"}`}
+                    >
+                      {entry}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="space-y-6">
+                    <div className="rounded-[24px] border border-black/10 bg-white p-8">
+                      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-5">
+                          <Avatar className="h-20 w-20 border border-black/10">
+                            <AvatarImage src={profileForm.avatar_url || undefined} alt={profileForm.name} />
+                            <AvatarFallback>{initials(profileForm.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="text-[28px] font-semibold">{profileForm.name}</div>
+                            <div className="text-black/55">{user.role.replace("_", " ")}</div>
+                          </div>
+                        </div>
+                        <Button className="rounded-2xl" disabled={busy} onClick={() => void handleProfileSubmit()}>
+                          Save Changes
+                        </Button>
+                      </div>
+
+                      <div className="mt-10 grid gap-5 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Full name</Label>
+                          <Input
+                            value={profileForm.name}
+                            onChange={(event) =>
+                              setProfileForm((current) => ({ ...current, name: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Email address</Label>
+                          <Input
+                            type="email"
+                            value={profileForm.email}
+                            onChange={(event) =>
+                              setProfileForm((current) => ({ ...current, email: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Phone number</Label>
+                          <Input
+                            value={profileForm.phone}
+                            onChange={(event) =>
+                              setProfileForm((current) => ({ ...current, phone: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Username</Label>
+                          <Input
+                            value={profileForm.login}
+                            onChange={(event) =>
+                              setProfileForm((current) => ({ ...current, login: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Avatar URL</Label>
+                          <Input
+                            value={profileForm.avatar_url}
+                            onChange={(event) =>
+                              setProfileForm((current) => ({ ...current, avatar_url: event.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="rounded-[24px] border border-black/10 bg-white p-7">
+                        <div className="text-[20px] font-semibold">Security Password</div>
+                        <p className="mt-3 text-sm leading-6 text-black/55">
+                          Leave these fields empty when you only want to update profile details.
+                        </p>
+                        <div className="mt-6 space-y-4">
+                          <div className="space-y-2">
+                            <Label>Current password</Label>
+                            <Input
+                              type="password"
+                              value={profileForm.current_password}
+                              onChange={(event) =>
+                                setProfileForm((current) => ({
+                                  ...current,
+                                  current_password: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>New password</Label>
+                            <Input
+                              type="password"
+                              value={profileForm.password}
+                              onChange={(event) =>
+                                setProfileForm((current) => ({ ...current, password: event.target.value }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Confirm new password</Label>
+                            <Input
+                              type="password"
+                              value={profileForm.password_confirmation}
+                              onChange={(event) =>
+                                setProfileForm((current) => ({
+                                  ...current,
+                                  password_confirmation: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[24px] border border-black/10 bg-white p-7">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[20px] font-semibold">Two-Factor Auth</div>
+                            <p className="mt-3 text-sm leading-6 text-black/55">
+                              UI-ready security panel matching the dashboard style.
+                            </p>
+                          </div>
+                          <div className="flex h-8 w-14 items-center justify-end rounded-full bg-black p-1">
+                            <div className="h-6 w-6 rounded-full bg-white" />
+                          </div>
+                        </div>
+                        <div className="mt-20 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                          Active account role: {user.role.replace("_", " ")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="rounded-[24px] border border-black/10 bg-[#f0f0f0] p-7">
+                      <div className="text-sm font-semibold uppercase tracking-[0.22em] text-black/45">Active Sessions</div>
+                      <div className="mt-6 space-y-5">
+                        <div>
+                          <div className="font-semibold">Current browser</div>
+                          <div className="mt-1 text-sm text-black/50">Africa/Casablanca • Current</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">Last login</div>
+                          <div className="mt-1 text-sm text-black/50">
+                            {user.last_login_at ? formatLongDate(user.last_login_at) : "Not recorded yet"}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-6 text-sm font-semibold text-[var(--danger)]"
+                        onClick={() => startTransition(() => void signOut({ callbackUrl: "/login" }))}
+                      >
+                        Log out this device
+                      </button>
+                    </div>
+
+                    <div className="rounded-[24px] bg-black p-7 text-white">
+                      <div className="text-sm font-semibold uppercase tracking-[0.22em] text-white/55">Plan Status</div>
+                      <div className="mt-5 text-[38px] font-semibold">Enterprise</div>
+                      <div className="mt-2 text-white/60">Portfolio workspace</div>
+                      <div className="mt-6 h-2 rounded-full bg-white/20">
+                        <div className="h-full w-[84%] rounded-full bg-white" />
+                      </div>
+                      <div className="mt-3 text-sm text-white/55">{logements.length} properties managed</div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-black/10 bg-white p-7">
+                      <div className="text-sm font-semibold uppercase tracking-[0.22em] text-black/45">Appearance</div>
+                      <div className="mt-6 grid grid-cols-2 gap-4">
+                        <div className="rounded-2xl border-2 border-black bg-white p-4">
+                          <div className="h-2 w-full rounded bg-black/10" />
+                          <div className="mt-3 h-2 w-2/3 rounded bg-black/10" />
+                        </div>
+                        <div className="rounded-2xl bg-[#888888] p-4">
+                          <div className="h-2 w-full rounded bg-white/20" />
+                          <div className="mt-3 h-2 w-2/3 rounded bg-white/20" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </section>
             ) : null}

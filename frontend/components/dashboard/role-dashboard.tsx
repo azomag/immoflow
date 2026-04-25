@@ -8,6 +8,7 @@ import {
   type Commune,
   type Contrat,
   type Logement,
+  type NotificationRecord,
   type Paiement,
   type TypeLogement,
   type UserRecord,
@@ -24,17 +25,17 @@ type DashboardData = {
   logements: Logement[];
   contrats: Contrat[];
   paiements: Paiement[];
+  notifications: NotificationRecord[];
 };
 
 async function fetchDashboardData(role: AppRole, token: string): Promise<DashboardData> {
-  const [logementData, contratData, paiementData, userData, communeData, typeData] =
+  const [logementData, contratData, paiementData, notificationData, userData, communeData, typeData] =
     await Promise.all([
       backendRequest<{ logements: Logement[] }>("/api/logements", {}, token),
       backendRequest<{ contrats: Contrat[] }>("/api/contrats", {}, token),
       backendRequest<{ paiements: Paiement[] }>("/api/paiements", {}, token),
-      role === "locataire"
-        ? Promise.resolve({ users: [] as UserRecord[] })
-        : backendRequest<{ users: UserRecord[] }>("/api/users", {}, token),
+      backendRequest<{ notifications: NotificationRecord[] }>("/api/notifications", {}, token),
+      backendRequest<{ users: UserRecord[] }>("/api/users", {}, token),
       role === "locataire"
         ? Promise.resolve({ communes: [] as Commune[] })
         : backendRequest<{ communes: Commune[] }>("/api/communes", {}, token),
@@ -50,6 +51,7 @@ async function fetchDashboardData(role: AppRole, token: string): Promise<Dashboa
     logements: logementData.logements,
     contrats: contratData.contrats,
     paiements: paiementData.paiements,
+    notifications: notificationData.notifications,
   };
 }
 
@@ -64,6 +66,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
     logements: [],
     contrats: [],
     paiements: [],
+    notifications: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +152,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
         logements={data.logements}
         contrats={data.contrats}
         paiements={data.paiements}
+        notifications={data.notifications}
         communes={data.communes}
         types={data.types}
         reload={loadData}
@@ -164,7 +168,8 @@ export function RoleDashboard({ role }: { role: AppRole }) {
         users={data.users}
         logements={data.logements}
         contrats={data.contrats}
-        paiements={data.paiements}
+       paiements={data.paiements}
+        notifications={data.notifications}
         communes={data.communes}
         types={data.types}
         reload={loadData}
@@ -179,6 +184,8 @@ export function RoleDashboard({ role }: { role: AppRole }) {
       logements={data.logements}
       contrats={data.contrats}
       paiements={data.paiements}
+      users={data.users}
+      notifications={data.notifications}
       reload={loadData}
     />
   );

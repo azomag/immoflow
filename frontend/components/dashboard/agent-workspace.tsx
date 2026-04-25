@@ -17,6 +17,7 @@ import {
   ReceiptText,
   Search,
   Share2,
+  UserCog,
   Users,
 } from "lucide-react";
 import type {
@@ -24,12 +25,16 @@ import type {
   Commune,
   Contrat,
   Logement,
+  NotificationRecord,
   Paiement,
   TypeLogement,
   UserRecord,
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarMenu } from "@/components/dashboard/avatar-menu";
+import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
+import { ProfilePanel } from "@/components/dashboard/profile-panel";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,20 +57,30 @@ type AgentWorkspaceProps = {
   logements: Logement[];
   contrats: Contrat[];
   paiements: Paiement[];
+  notifications: NotificationRecord[];
   communes: Commune[];
   types: TypeLogement[];
   reload: () => Promise<void>;
 };
 
-type AgentTab = "dashboard" | "properties" | "contracts" | "payments" | "tenants";
+type AgentTab = "dashboard" | "properties" | "contracts" | "payments" | "tenants" | "notifications" | "profile";
 
 function emptyPropertyForm() {
   return {
     type_logement_id: "",
     commune_id: "",
     adresse: "",
+    titre: "",
+    description: "",
     superficie: "",
     loyer: "",
+    chambres: "",
+    salles_bain: "",
+    etage: "",
+    parking: false,
+    chauffage: "",
+    statut_publication: "listed",
+    images_text: "",
   };
 }
 
@@ -76,6 +91,7 @@ export function AgentWorkspace({
   logements,
   contrats,
   paiements,
+  notifications,
   communes,
   types,
   reload,
@@ -103,6 +119,8 @@ export function AgentWorkspace({
     mode: "Virement",
     statut: "paid",
   });
+  const [communeForm, setCommuneForm] = useState({ nom: "", nombre_habitants: "", distance_agence: "" });
+  const [typeForm, setTypeForm] = useState({ nom_type: "", charge_forfaitaires: "" });
 
   const tenantUsers = useMemo(
     () => users.filter((entry) => entry.role === "locataire"),
@@ -211,8 +229,17 @@ export function AgentWorkspace({
       type_logement_id: String(snapshot.logement.type_logement.id),
       commune_id: String(snapshot.logement.commune.id),
       adresse: snapshot.logement.adresse,
+      titre: snapshot.logement.titre ?? "",
+      description: snapshot.logement.description ?? "",
       superficie: snapshot.logement.superficie,
       loyer: snapshot.logement.loyer,
+      chambres: snapshot.logement.chambres ? String(snapshot.logement.chambres) : "",
+      salles_bain: snapshot.logement.salles_bain ? String(snapshot.logement.salles_bain) : "",
+      etage: snapshot.logement.etage ?? "",
+      parking: snapshot.logement.parking ?? false,
+      chauffage: snapshot.logement.chauffage ?? "",
+      statut_publication: snapshot.logement.statut_publication ?? "listed",
+      images_text: (snapshot.logement.images ?? []).join("\n"),
     });
   }
 
@@ -221,8 +248,17 @@ export function AgentWorkspace({
       type_logement_id: Number(propertyForm.type_logement_id),
       commune_id: Number(propertyForm.commune_id),
       adresse: propertyForm.adresse,
+      titre: propertyForm.titre || null,
+      description: propertyForm.description || null,
       superficie: Number(propertyForm.superficie),
       loyer: Number(propertyForm.loyer),
+      chambres: propertyForm.chambres ? Number(propertyForm.chambres) : null,
+      salles_bain: propertyForm.salles_bain ? Number(propertyForm.salles_bain) : null,
+      etage: propertyForm.etage || null,
+      parking: propertyForm.parking,
+      chauffage: propertyForm.chauffage || null,
+      statut_publication: propertyForm.statut_publication,
+      images: propertyForm.images_text.split("\n").map((entry) => entry.trim()).filter(Boolean),
     };
 
     await runMutation(async () => {
@@ -285,6 +321,35 @@ export function AgentWorkspace({
     });
   }
 
+  async function handleCreateCommune() {
+    await runMutation(async () => {
+      await backendRequest("/api/communes", {
+        method: "POST",
+        body: JSON.stringify({
+          nom: communeForm.nom,
+          nombre_habitants: Number(communeForm.nombre_habitants),
+          distance_agence: Number(communeForm.distance_agence),
+        }),
+      }, token);
+      setCommuneForm({ nom: "", nombre_habitants: "", distance_agence: "" });
+      setNotice("Commune created.");
+    });
+  }
+
+  async function handleCreateType() {
+    await runMutation(async () => {
+      await backendRequest("/api/type-logements", {
+        method: "POST",
+        body: JSON.stringify({
+          nom_type: typeForm.nom_type,
+          charge_forfaitaires: Number(typeForm.charge_forfaitaires),
+        }),
+      }, token);
+      setTypeForm({ nom_type: "", charge_forfaitaires: "" });
+      setNotice("House type created.");
+    });
+  }
+
   function handleShareProperty(snapshot: (typeof propertySnapshots)[number]) {
     if (navigator.clipboard) {
       void navigator.clipboard.writeText(
@@ -322,6 +387,8 @@ export function AgentWorkspace({
     { id: "contracts", label: "Contracts", icon: FileText },
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "tenants", label: "Tenants", icon: Users },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "profile", label: "Profile", icon: UserCog },
   ];
 
   return (
@@ -400,10 +467,7 @@ export function AgentWorkspace({
               <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
                 <CircleHelp className="h-5 w-5" />
               </button>
-              <Avatar className="h-11 w-11 border border-black/8">
-                <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
-                <AvatarFallback>{initials(user.name)}</AvatarFallback>
-              </Avatar>
+              <AvatarMenu user={user} onProfile={() => openTab("profile")} />
             </div>
           </header>
 
@@ -641,6 +705,42 @@ export function AgentWorkspace({
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input
+                          value={propertyForm.titre}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, titre: event.target.value }))
+                          }
+                          placeholder="F3 Hay Riad"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Publication Status</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={propertyForm.statut_publication}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, statut_publication: event.target.value }))
+                          }
+                        >
+                          <option value="listed">Listed</option>
+                          <option value="draft">Draft</option>
+                          <option value="maintenance">Maintenance</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <textarea
+                        className="min-h-24 w-full rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        value={propertyForm.description}
+                        onChange={(event) =>
+                          setPropertyForm((current) => ({ ...current, description: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
                         <Label>Area</Label>
                         <Input
                           type="number"
@@ -659,6 +759,89 @@ export function AgentWorkspace({
                             setPropertyForm((current) => ({ ...current, loyer: event.target.value }))
                           }
                         />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>Bedrooms</Label>
+                        <Input
+                          type="number"
+                          value={propertyForm.chambres}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, chambres: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Bathrooms</Label>
+                        <Input
+                          type="number"
+                          value={propertyForm.salles_bain}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, salles_bain: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Floor</Label>
+                        <Input
+                          value={propertyForm.etage}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, etage: event.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Heating</Label>
+                        <Input
+                          value={propertyForm.chauffage}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, chauffage: event.target.value }))
+                          }
+                          placeholder="Electric"
+                        />
+                      </div>
+                      <label className="flex h-12 items-center gap-3 rounded-2xl border border-black/8 bg-white px-4 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={propertyForm.parking}
+                          onChange={(event) =>
+                            setPropertyForm((current) => ({ ...current, parking: event.target.checked }))
+                          }
+                        />
+                        Parking included
+                      </label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>House image URLs</Label>
+                      <textarea
+                        className="min-h-24 w-full rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        value={propertyForm.images_text}
+                        onChange={(event) =>
+                          setPropertyForm((current) => ({ ...current, images_text: event.target.value }))
+                        }
+                        placeholder="One image URL per line"
+                      />
+                    </div>
+                    <div className="grid gap-4 rounded-[20px] bg-[#f6f6f4] p-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <Label>Add commune</Label>
+                        <Input placeholder="Commune name" value={communeForm.nom} onChange={(event) => setCommuneForm((current) => ({ ...current, nom: event.target.value }))} />
+                        <Input type="number" placeholder="Population" value={communeForm.nombre_habitants} onChange={(event) => setCommuneForm((current) => ({ ...current, nombre_habitants: event.target.value }))} />
+                        <Input type="number" placeholder="Distance" value={communeForm.distance_agence} onChange={(event) => setCommuneForm((current) => ({ ...current, distance_agence: event.target.value }))} />
+                        <Button variant="outline" className="w-full rounded-2xl" disabled={busy} onClick={() => void handleCreateCommune()}>
+                          Save commune
+                        </Button>
+                      </div>
+                      <div className="space-y-3">
+                        <Label>Add house type</Label>
+                        <Input placeholder="Apartment, villa..." value={typeForm.nom_type} onChange={(event) => setTypeForm((current) => ({ ...current, nom_type: event.target.value }))} />
+                        <Input type="number" placeholder="Flat charges" value={typeForm.charge_forfaitaires} onChange={(event) => setTypeForm((current) => ({ ...current, charge_forfaitaires: event.target.value }))} />
+                        <Button variant="outline" className="w-full rounded-2xl" disabled={busy} onClick={() => void handleCreateType()}>
+                          Save type
+                        </Button>
                       </div>
                     </div>
                     <div className="flex gap-3">
@@ -1052,6 +1235,20 @@ export function AgentWorkspace({
                   </div>
                 </div>
               </section>
+            ) : null}
+
+            {activeTab === "notifications" ? (
+              <NotificationsPanel
+                token={token}
+                user={user}
+                users={users}
+                notifications={notifications}
+                reload={reload}
+              />
+            ) : null}
+
+            {activeTab === "profile" ? (
+              <ProfilePanel token={token} user={user} onSaved={reload} />
             ) : null}
 
             {activeTab === "tenants" ? (

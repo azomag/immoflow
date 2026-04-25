@@ -36,8 +36,18 @@ class LogementController extends Controller
             'type_logement_id' => ['required', 'integer', 'exists:type_logements,id'],
             'commune_id' => ['required', 'integer', 'exists:communes,id'],
             'adresse' => ['required', 'string', 'max:255'],
+            'titre' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'superficie' => ['required', 'numeric', 'min:0'],
             'loyer' => ['required', 'numeric', 'min:0'],
+            'chambres' => ['nullable', 'integer', 'min:0'],
+            'salles_bain' => ['nullable', 'integer', 'min:0'],
+            'etage' => ['nullable', 'string', 'max:50'],
+            'parking' => ['nullable', 'boolean'],
+            'chauffage' => ['nullable', 'string', 'max:100'],
+            'statut_publication' => ['nullable', 'string', 'max:50'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['nullable', 'url', 'max:2048'],
         ]);
 
         $agentId = $user->role === 'agent'
@@ -55,8 +65,17 @@ class LogementController extends Controller
             'type_logement_id' => $validated['type_logement_id'],
             'commune_id' => $validated['commune_id'],
             'adresse' => $validated['adresse'],
+            'titre' => $validated['titre'] ?? null,
+            'description' => $validated['description'] ?? null,
             'superficie' => $validated['superficie'],
             'loyer' => $validated['loyer'],
+            'chambres' => $validated['chambres'] ?? null,
+            'salles_bain' => $validated['salles_bain'] ?? null,
+            'etage' => $validated['etage'] ?? null,
+            'parking' => $validated['parking'] ?? false,
+            'chauffage' => $validated['chauffage'] ?? null,
+            'statut_publication' => $validated['statut_publication'] ?? 'listed',
+            'images' => $validated['images'] ?? [],
         ]);
 
         return response()->json([
@@ -81,8 +100,18 @@ class LogementController extends Controller
             'type_logement_id' => ['required', 'integer', 'exists:type_logements,id'],
             'commune_id' => ['required', 'integer', 'exists:communes,id'],
             'adresse' => ['required', 'string', 'max:255'],
+            'titre' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'superficie' => ['required', 'numeric', 'min:0'],
             'loyer' => ['required', 'numeric', 'min:0'],
+            'chambres' => ['nullable', 'integer', 'min:0'],
+            'salles_bain' => ['nullable', 'integer', 'min:0'],
+            'etage' => ['nullable', 'string', 'max:50'],
+            'parking' => ['nullable', 'boolean'],
+            'chauffage' => ['nullable', 'string', 'max:100'],
+            'statut_publication' => ['nullable', 'string', 'max:50'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['nullable', 'url', 'max:2048'],
         ]);
 
         $agentId = $user->role === 'agent'
@@ -100,8 +129,17 @@ class LogementController extends Controller
             'type_logement_id' => $validated['type_logement_id'],
             'commune_id' => $validated['commune_id'],
             'adresse' => $validated['adresse'],
+            'titre' => $validated['titre'] ?? null,
+            'description' => $validated['description'] ?? null,
             'superficie' => $validated['superficie'],
             'loyer' => $validated['loyer'],
+            'chambres' => $validated['chambres'] ?? null,
+            'salles_bain' => $validated['salles_bain'] ?? null,
+            'etage' => $validated['etage'] ?? null,
+            'parking' => $validated['parking'] ?? false,
+            'chauffage' => $validated['chauffage'] ?? null,
+            'statut_publication' => $validated['statut_publication'] ?? 'listed',
+            'images' => $validated['images'] ?? [],
         ]);
 
         return response()->json([

@@ -34,24 +34,35 @@ class ContratController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        if (! $user->agentProfile) {
+        if (! in_array($user->role, ['agent', 'admin', 'super_admin'], true)) {
             return response()->json([
-                'message' => 'Only agents can create contracts.',
+                'message' => 'Only agents and administrators can create contracts.',
             ], 403);
         }
 
         $validated = $request->validate([
             'locataire_id' => ['required', 'integer', 'exists:locataires,id'],
             'logement_id' => ['required', 'integer', 'exists:logements,id'],
+            'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
             'date_debut' => ['required', 'date'],
             'date_fin' => ['nullable', 'date', 'after_or_equal:date_debut'],
             'montant' => ['required', 'numeric', 'min:0'],
             'statut' => ['required', 'string', 'max:50'],
         ]);
 
+        $agentId = $user->role === 'agent'
+            ? $user->agentProfile?->id
+            : ($validated['agent_id'] ?? null);
+
+        if (! $agentId) {
+            return response()->json([
+                'message' => 'A valid agent is required.',
+            ], 422);
+        }
+
         $contrat = Contrat::create([
             'locataire_id' => $validated['locataire_id'],
-            'agent_id' => $user->agentProfile->id,
+            'agent_id' => $agentId,
             'logement_id' => $validated['logement_id'],
             'date_debut' => $validated['date_debut'],
             'date_fin' => $validated['date_fin'] ?? null,

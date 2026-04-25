@@ -10,9 +10,11 @@ import {
   FileSignature,
   LogOut,
 } from "lucide-react";
-import type { AuthenticatedUser, Contrat, Logement, Paiement } from "@/lib/api";
+import type { AuthenticatedUser, Contrat, Logement, NotificationRecord, Paiement, UserRecord } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarMenu } from "@/components/dashboard/avatar-menu";
+import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
+import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +22,6 @@ import {
   formatLongDate,
   formatMoney,
   formatShortDate,
-  initials,
   toneForStatus,
 } from "@/components/dashboard/workspace-utils";
 
@@ -30,10 +31,12 @@ type LocataireWorkspaceProps = {
   logements: Logement[];
   contrats: Contrat[];
   paiements: Paiement[];
+  users: UserRecord[];
+  notifications: NotificationRecord[];
   reload: () => Promise<void>;
 };
 
-type TenantTab = "dashboard" | "documents" | "payments";
+type TenantTab = "dashboard" | "documents" | "payments" | "notifications" | "profile";
 
 function sortByNewest<T extends { date_paiement?: string; date_debut?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
@@ -49,6 +52,8 @@ export function LocataireWorkspace({
   logements,
   contrats,
   paiements,
+  users,
+  notifications,
   reload,
 }: LocataireWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<TenantTab>("dashboard");
@@ -160,6 +165,8 @@ export function LocataireWorkspace({
                 { id: "dashboard", label: "Dashboard" },
                 { id: "documents", label: "Documents" },
                 { id: "payments", label: "Payments" },
+                { id: "notifications", label: "Notifications" },
+                { id: "profile", label: "Profile" },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -180,10 +187,7 @@ export function LocataireWorkspace({
             <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
               <CircleHelp className="h-5 w-5" />
             </button>
-            <Avatar className="h-12 w-12 border border-black/8">
-              <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
-              <AvatarFallback>{initials(user.name)}</AvatarFallback>
-            </Avatar>
+            <AvatarMenu user={user} onProfile={() => setActiveTab("profile")} />
           </div>
         </div>
       </header>
@@ -451,6 +455,20 @@ export function LocataireWorkspace({
               ))}
             </div>
           </div>
+        ) : null}
+
+        {activeTab === "notifications" ? (
+          <NotificationsPanel
+            token={token}
+            user={user}
+            users={users}
+            notifications={notifications}
+            reload={reload}
+          />
+        ) : null}
+
+        {activeTab === "profile" ? (
+          <ProfilePanel token={token} user={user} onSaved={reload} />
         ) : null}
       </main>
     </div>

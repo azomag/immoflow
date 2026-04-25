@@ -18,9 +18,29 @@ class Logement extends Model
         'type_logement_id',
         'commune_id',
         'adresse',
+        'titre',
+        'description',
         'superficie',
         'loyer',
+        'chambres',
+        'salles_bain',
+        'etage',
+        'parking',
+        'chauffage',
+        'statut_publication',
+        'images',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'parking' => 'boolean',
+            'images' => 'array',
+        ];
+    }
 
     public function agent(): BelongsTo
     {

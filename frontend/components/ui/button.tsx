@@ -11,11 +11,11 @@ const buttonVariants = cva(
         default:
           "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[0_12px_24px_rgba(31,29,26,0.14)] hover:-translate-y-0.5",
         secondary:
-          "bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[#cb9952]",
+          "bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--secondary-hover)]",
         outline:
           "border border-[var(--border)] bg-white/70 text-[var(--foreground)] hover:bg-white",
         ghost: "text-[var(--muted-foreground)] hover:bg-white/60 hover:text-[var(--foreground)]",
-        danger: "bg-[var(--danger)] text-white hover:bg-[#a53b36]",
+        danger: "bg-[var(--danger)] text-white hover:opacity-90",
       },
       size: {
         default: "h-11 px-5",

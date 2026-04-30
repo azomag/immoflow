@@ -102,6 +102,7 @@ export type Contrat = {
   statut: string;
   signature_status: string;
   signed_at: string | null;
+  signature_data: string | null;
   logement: Pick<Logement, "id" | "adresse" | "loyer">;
   agent: {
     id: number;
@@ -119,7 +120,11 @@ export type Paiement = {
   montant: string;
   date_paiement: string;
   mode: string;
+  rib: string | null;
+  reference: string | null;
+  cash_note: string | null;
   statut: string;
+  approved_by_tenant_at: string | null;
   contrat: Contrat;
 };
 
@@ -131,6 +136,32 @@ export type NotificationRecord = {
   created_at: string;
   sender: Pick<AuthenticatedUser, "id" | "name" | "email" | "role" | "avatar_url">;
   recipient: Pick<AuthenticatedUser, "id" | "name" | "email" | "role" | "avatar_url">;
+};
+
+export type ConversationParticipant = Pick<
+  AuthenticatedUser,
+  "id" | "name" | "email" | "role" | "avatar_url"
+>;
+
+export type MessageRecord = {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+  sender: ConversationParticipant;
+};
+
+export type ConversationRecord = {
+  id: number;
+  title: string | null;
+  created_by_id: number | null;
+  last_message_at: string | null;
+  participants: ConversationParticipant[];
+  messages: MessageRecord[];
+  created_at: string;
+  updated_at: string;
 };
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";

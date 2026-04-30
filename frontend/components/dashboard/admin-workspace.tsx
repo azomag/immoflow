@@ -1,28 +1,36 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   Bell,
   Building2,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
+  Eye,
+  FileDown,
   CircleHelp,
   CreditCard,
   Ellipsis,
   FileText,
-  Landmark,
   LayoutGrid,
+  PencilLine,
   Mail,
+  Menu,
   Plus,
   Search,
   Settings,
   Share2,
   ShieldCheck,
+  UploadCloud,
   UserCog,
   UserPlus,
   Users,
+  Trash2,
+  X,
 } from "lucide-react";
+import { gsap } from "gsap";
 import type {
   AppRole,
   AuthenticatedUser,
@@ -35,14 +43,24 @@ import type {
   UserRecord,
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { formatFileSize, prepareImagesForUpload } from "@/lib/image-upload";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildPropertySnapshot,
   downloadTextFile,
@@ -88,6 +106,10 @@ function emptyPropertyForm() {
     chauffage: "",
     statut_publication: "listed",
     images_text: "",
+    locataire_id: "",
+    contrat_date_debut: new Date().toISOString().slice(0, 10),
+    contrat_date_fin: "",
+    contrat_statut: "active",
   };
 }
 
@@ -105,6 +127,17 @@ export function AdminWorkspace({
   reload,
 }: AdminWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(true);
+  const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
+  const [propertyWizardStep, setPropertyWizardStep] = useState(0);
+  const [contractWizardOpen, setContractWizardOpen] = useState(false);
+  const [contractWizardStep, setContractWizardStep] = useState(0);
+  const [paymentWizardOpen, setPaymentWizardOpen] = useState(false);
+  const [paymentWizardStep, setPaymentWizardStep] = useState(0);
+  const [userWizardOpen, setUserWizardOpen] = useState(false);
+  const [userWizardStep, setUserWizardStep] = useState(0);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [communeFilter, setCommuneFilter] = useState("All");
@@ -116,21 +149,17 @@ export function AdminWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [propertyForm, setPropertyForm] = useState(emptyPropertyForm);
-  const [communeForm, setCommuneForm] = useState({
-    nom: "",
-    nombre_habitants: "",
-    distance_agence: "",
-  });
-  const [typeForm, setTypeForm] = useState({
-    nom_type: "",
-    charge_forfaitaires: "",
-  });
+  const [propertyImageFiles, setPropertyImageFiles] = useState<File[]>([]);
+  const [preparingImages, setPreparingImages] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     contrat_id: "",
     montant: "",
     date_paiement: new Date().toISOString().slice(0, 10),
     mode: "Virement",
-    statut: "paid",
+    rib: "",
+    reference: "",
+    cash_note: "",
+    statut: "awaiting_tenant_approval",
   });
   const [contractForm, setContractForm] = useState({
     agent_id: "",
@@ -165,6 +194,8 @@ export function AdminWorkspace({
     password: "",
     password_confirmation: "",
   });
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   const agentUsers = useMemo(
     () => users.filter((entry) => entry.role === "agent" && entry.agent_profile),
@@ -328,6 +359,78 @@ export function AdminWorkspace({
     });
   }, [contrats, tenantUsers]);
 
+  const contractPropertyOptions = useMemo(() => {
+    if (!contractForm.locataire_id) {
+      return propertySnapshots
+        .filter((snapshot) => !snapshot.activeContract)
+        .map((snapshot) => snapshot.logement);
+    }
+
+    const attached = contrats
+      .filter((contrat) => String(contrat.locataire.id) === contractForm.locataire_id)
+      .map((contrat) => logements.find((logement) => logement.id === contrat.logement.id))
+      .filter((logement): logement is Logement => Boolean(logement));
+
+    if (attached.length > 0) {
+      return attached;
+    }
+
+    return propertySnapshots
+      .filter((snapshot) => !snapshot.activeContract)
+      .map((snapshot) => snapshot.logement);
+  }, [contractForm.locataire_id, contrats, logements, propertySnapshots]);
+
+  const selectedPaymentContract = useMemo(
+    () => contrats.find((entry) => String(entry.id) === paymentForm.contrat_id) ?? null,
+    [contrats, paymentForm.contrat_id],
+  );
+
+  useEffect(() => {
+    if (!notice && !error) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setNotice(null);
+      setError(null);
+    }, 3600);
+
+    return () => window.clearTimeout(timeout);
+  }, [error, notice]);
+
+  useEffect(() => {
+    if (!workspaceRef.current) {
+      return;
+    }
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        ".nav-animate",
+        { x: -12, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.32, ease: "power2.out", stagger: 0.035 },
+      );
+    }, workspaceRef);
+
+    return () => ctx.revert();
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!contentRef.current) {
+      return;
+    }
+
+    const panels = Array.from(contentRef.current.children);
+    if (!panels.length) {
+      return;
+    }
+
+    gsap.fromTo(
+      panels,
+      { y: 16, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.36, ease: "power2.out", stagger: 0.045, overwrite: "auto" },
+    );
+  }, [activeTab, selectedPropertyId, userView]);
+
   async function runMutation(action: () => Promise<void>) {
     setBusy(true);
     setError(null);
@@ -346,16 +449,75 @@ export function AdminWorkspace({
   function resetPropertyEditor() {
     setEditingPropertyId(null);
     setPropertyForm(emptyPropertyForm());
+    setPropertyImageFiles([]);
+    setPropertyWizardStep(0);
   }
 
   function openTab(tab: AdminTab) {
     setActiveTab(tab);
     setSelectedPropertyId(null);
+    setSidebarOpen(false);
     resetPropertyEditor();
   }
 
   function openCreateProperty() {
     openTab("properties");
+    setPropertyWizardStep(0);
+    setPropertyPanelOpen(true);
+  }
+
+  function openContractWizard() {
+    setActiveTab("contracts");
+    setContractWizardStep(0);
+    setContractWizardOpen(true);
+    setSidebarOpen(false);
+  }
+
+  function openPaymentWizard() {
+    setActiveTab("payments");
+    setPaymentWizardStep(0);
+    setPaymentWizardOpen(true);
+    setSidebarOpen(false);
+  }
+
+  function openUserWizard() {
+    setActiveTab("users");
+    setUserWizardStep(0);
+    setUserForm((current) => ({
+      ...current,
+      role: role === "super_admin" ? "admin" : "agent",
+    }));
+    setUserWizardOpen(true);
+    setSidebarOpen(false);
+  }
+
+  async function handlePropertyImagesChange(files: File[]) {
+    if (files.length === 0) {
+      return;
+    }
+
+    if (files.length > 10) {
+      setError("You can upload a maximum of 10 images for one property.");
+      files = files.slice(0, 10);
+    }
+
+    setPreparingImages(true);
+    setError(null);
+
+    try {
+      const preparedFiles = await prepareImagesForUpload(files);
+      const optimizedCount = preparedFiles.filter((file, index) => file.size < files[index].size).length;
+      setPropertyImageFiles(preparedFiles);
+      setNotice(
+        optimizedCount > 0
+          ? `${optimizedCount} image${optimizedCount > 1 ? "s" : ""} optimized for upload.`
+          : "Images ready for upload.",
+      );
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Could not prepare the selected images.");
+    } finally {
+      setPreparingImages(false);
+    }
   }
 
   function openPropertyDetail(propertyId: number) {
@@ -365,6 +527,8 @@ export function AdminWorkspace({
 
   function beginEditProperty(snapshot: (typeof propertySnapshots)[number]) {
     setEditingPropertyId(snapshot.logement.id);
+    setPropertyWizardStep(0);
+    setPropertyPanelOpen(true);
     setPropertyForm({
       agent_id: String(snapshot.logement.agent.id),
       type_logement_id: String(snapshot.logement.type_logement.id),
@@ -381,44 +545,82 @@ export function AdminWorkspace({
       chauffage: snapshot.logement.chauffage ?? "",
       statut_publication: snapshot.logement.statut_publication ?? "listed",
       images_text: (snapshot.logement.images ?? []).join("\n"),
+      locataire_id: String((snapshot.activeContract ?? snapshot.latestContract)?.locataire.id ?? ""),
+      contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? new Date().toISOString().slice(0, 10),
+      contrat_date_fin: (snapshot.activeContract ?? snapshot.latestContract)?.date_fin ?? "",
+      contrat_statut: (snapshot.activeContract ?? snapshot.latestContract)?.statut ?? "active",
     });
+    setPropertyImageFiles([]);
   }
 
   async function handlePropertySubmit() {
-    const payload = {
-      agent_id: Number(propertyForm.agent_id),
-      type_logement_id: Number(propertyForm.type_logement_id),
-      commune_id: Number(propertyForm.commune_id),
-      adresse: propertyForm.adresse,
-      titre: propertyForm.titre || null,
-      description: propertyForm.description || null,
-      superficie: Number(propertyForm.superficie),
-      loyer: Number(propertyForm.loyer),
-      chambres: propertyForm.chambres ? Number(propertyForm.chambres) : null,
-      salles_bain: propertyForm.salles_bain ? Number(propertyForm.salles_bain) : null,
-      etage: propertyForm.etage || null,
-      parking: propertyForm.parking,
-      chauffage: propertyForm.chauffage || null,
-      statut_publication: propertyForm.statut_publication,
-      images: propertyForm.images_text.split("\n").map((entry) => entry.trim()).filter(Boolean),
-    };
+    const payload = new FormData();
+    payload.set("agent_id", propertyForm.agent_id);
+    payload.set("type_logement_id", propertyForm.type_logement_id);
+    payload.set("commune_id", propertyForm.commune_id);
+    payload.set("adresse", propertyForm.adresse);
+    payload.set("titre", propertyForm.titre);
+    payload.set("description", propertyForm.description);
+    payload.set("superficie", propertyForm.superficie);
+    payload.set("loyer", propertyForm.loyer);
+    payload.set("chambres", propertyForm.chambres);
+    payload.set("salles_bain", propertyForm.salles_bain);
+    payload.set("etage", propertyForm.etage);
+    payload.set("parking", propertyForm.parking ? "1" : "0");
+    payload.set("chauffage", propertyForm.chauffage);
+    payload.set("statut_publication", propertyForm.statut_publication);
+    propertyForm.images_text.split("\n").map((entry) => entry.trim()).filter(Boolean).forEach((image) => {
+      payload.append("images[]", image);
+    });
+    propertyImageFiles.forEach((file) => {
+      payload.append("image_files[]", file);
+    });
 
     await runMutation(async () => {
+      let savedPropertyId = editingPropertyId;
+
       if (editingPropertyId) {
+        payload.set("_method", "PATCH");
         await backendRequest(`/api/logements/${editingPropertyId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
+          method: "POST",
+          body: payload,
         }, token);
         setNotice("Property updated.");
       } else {
-        await backendRequest("/api/logements", {
+        const response = await backendRequest<{ logement: Logement }>("/api/logements", {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: payload,
         }, token);
+        savedPropertyId = response.logement.id;
         setNotice("Property created.");
       }
 
+      if (savedPropertyId && propertyForm.locataire_id) {
+        const alreadyAttached = contrats.some(
+          (contrat) =>
+            contrat.logement.id === savedPropertyId &&
+            String(contrat.locataire.id) === propertyForm.locataire_id &&
+            contrat.statut.toLowerCase() === "active",
+        );
+
+        if (!alreadyAttached) {
+          await backendRequest("/api/contrats", {
+            method: "POST",
+            body: JSON.stringify({
+              agent_id: Number(propertyForm.agent_id),
+              locataire_id: Number(propertyForm.locataire_id),
+              logement_id: savedPropertyId,
+              date_debut: propertyForm.contrat_date_debut,
+              date_fin: propertyForm.contrat_date_fin || null,
+              montant: Number(propertyForm.loyer),
+              statut: propertyForm.contrat_statut,
+            }),
+          }, token);
+        }
+      }
+
       resetPropertyEditor();
+      setPropertyPanelOpen(false);
     });
   }
 
@@ -432,35 +634,6 @@ export function AdminWorkspace({
     });
   }
 
-  async function handleCreateCommune() {
-    await runMutation(async () => {
-      await backendRequest("/api/communes", {
-        method: "POST",
-        body: JSON.stringify({
-          nom: communeForm.nom,
-          nombre_habitants: Number(communeForm.nombre_habitants),
-          distance_agence: Number(communeForm.distance_agence),
-        }),
-      }, token);
-      setCommuneForm({ nom: "", nombre_habitants: "", distance_agence: "" });
-      setNotice("Commune created.");
-    });
-  }
-
-  async function handleCreateType() {
-    await runMutation(async () => {
-      await backendRequest("/api/type-logements", {
-        method: "POST",
-        body: JSON.stringify({
-          nom_type: typeForm.nom_type,
-          charge_forfaitaires: Number(typeForm.charge_forfaitaires),
-        }),
-      }, token);
-      setTypeForm({ nom_type: "", charge_forfaitaires: "" });
-      setNotice("Housing type created.");
-    });
-  }
-
   async function handleRecordPayment() {
     await runMutation(async () => {
       await backendRequest("/api/paiements", {
@@ -470,14 +643,23 @@ export function AdminWorkspace({
           montant: Number(paymentForm.montant),
           date_paiement: paymentForm.date_paiement,
           mode: paymentForm.mode,
+          rib: paymentForm.mode === "Virement" ? paymentForm.rib : null,
+          reference: paymentForm.reference || null,
+          cash_note: paymentForm.mode === "Cash" ? paymentForm.cash_note : null,
           statut: paymentForm.statut,
         }),
       }, token);
-      setNotice("Payment recorded.");
+      setNotice("Payment recorded and sent to the tenant for approval.");
+      setPaymentWizardOpen(false);
+      setPaymentWizardStep(0);
       setPaymentForm((current) => ({
         ...current,
+        contrat_id: "",
         montant: "",
-        statut: "paid",
+        rib: "",
+        reference: "",
+        cash_note: "",
+        statut: "awaiting_tenant_approval",
       }));
     });
   }
@@ -507,6 +689,8 @@ export function AdminWorkspace({
         statut: "active",
       });
       setNotice("Contract created.");
+      setContractWizardOpen(false);
+      setContractWizardStep(0);
     });
   }
 
@@ -542,6 +726,8 @@ export function AdminWorkspace({
         password: "",
         password_confirmation: "",
       }));
+      setUserWizardOpen(false);
+      setUserWizardStep(0);
       setNotice("User created.");
     });
   }
@@ -593,22 +779,37 @@ export function AdminWorkspace({
       return;
     }
 
-    downloadTextFile(
-      `invoice-${snapshot.ref.toLowerCase()}.txt`,
-      [
-        "ImmoFlow Invoice",
-        `Property: ${snapshot.logement.adresse}`,
-        `Reference: ${snapshot.ref}`,
-        `Commune: ${snapshot.logement.commune.nom}`,
-        `Tenant: ${contract.locataire.user.name}`,
-        `Agent: ${contract.agent.user.name}`,
-        `Rent: ${formatMoney(contract.montant)} MAD`,
-        `Contract start: ${formatLongDate(contract.date_debut)}`,
-        `Contract end: ${formatLongDate(contract.date_fin, "Open")}`,
-        `Status: ${contract.statut}`,
-      ].join("\n"),
-    );
-    setNotice("Invoice generated.");
+    downloadInvoicePdf({
+      ref: snapshot.ref,
+      logement: snapshot.logement,
+      contract,
+      payments: paiements.filter((payment) => payment.contrat.logement.id === snapshot.logement.id),
+      issuerName: user.name,
+      issuerEmail: user.email,
+    });
+    setNotice("PDF invoice generated.");
+  }
+
+  async function handleDeleteProperty(snapshot: (typeof propertySnapshots)[number]) {
+    const { default: Swal } = await import("sweetalert2");
+    const result = await Swal.fire({
+      title: "Delete property?",
+      text: "Properties with contracts cannot be deleted. Use draft for historical records.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await runMutation(async () => {
+      await backendRequest(`/api/logements/${snapshot.logement.id}`, { method: "DELETE" }, token);
+      setNotice("Property deleted.");
+    });
   }
 
   const navItems: Array<{ id: AdminTab; label: string; icon: typeof LayoutGrid }> = [
@@ -618,122 +819,207 @@ export function AdminWorkspace({
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "tenants", label: "Tenants", icon: Users },
     { id: "users", label: "User Management", icon: UserCog },
-    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "notifications", label: "Messages", icon: Bell },
     { id: "profile", label: "Profile", icon: UserCog },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
+  function statusActionClass(status: string, isActive: boolean): string {
+    if (status === "active") {
+      return isActive
+        ? "bg-emerald-600 text-white"
+        : "bg-emerald-50 text-emerald-700";
+    }
+    if (status === "pending") {
+      return isActive
+        ? "bg-amber-500 text-white"
+        : "bg-amber-50 text-amber-700";
+    }
+    return isActive
+      ? "bg-red-600 text-white"
+      : "bg-red-50 text-red-700";
+  }
+
   return (
-    <div className="min-h-screen bg-[#fcfcfb] text-[#171411]">
-      <div className="grid min-h-screen lg:grid-cols-[306px_minmax(0,1fr)]">
-        <aside className="flex flex-col border-r border-black/8 bg-[#eef2f6] px-5 py-6">
+    <div ref={workspaceRef} className="min-h-screen bg-[var(--background)]">
+      <div className={`grid min-h-screen transition-[grid-template-columns] duration-300 ${sidebarCollapsed ? "lg:grid-cols-[96px_minmax(0,1fr)]" : "lg:grid-cols-[306px_minmax(0,1fr)]"}`}>
+        <aside className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} sidebar-dark fixed inset-y-0 left-0 z-40 flex w-[306px] flex-col border-r border-[var(--sidebar-border)] px-5 py-6 transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[306px]"}`}>
           <div className="space-y-1 px-2">
-            <div className="text-[18px] font-bold tracking-tight">ImmoFlow</div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/45">
+            <div className="flex items-center justify-between">
+              <div className={`flex items-center gap-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
+                  <Building2 className="h-4 w-4" />
+                </div>
+                <div className="text-[18px] font-bold tracking-tight text-white">ImmoFlow</div>
+              </div>
+              <button type="button" className="hidden rounded-full p-2 text-white/55 transition hover:bg-white/10 lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
+                <ChevronLeft className={`h-5 w-5 transition-transform ${sidebarCollapsed ? "rotate-180" : ""}`} />
+              </button>
+              <button type="button" className="rounded-full p-2 text-white/55 lg:hidden" onClick={() => setSidebarOpen(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className={`text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               Real Estate SaaS
             </div>
           </div>
 
-          <nav className="mt-10 space-y-2">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => openTab(item.id)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-4 text-left text-[15px] font-medium transition ${
-                  activeTab === item.id
-                    ? "bg-white text-black shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
-                    : "text-black/60 hover:bg-white/70 hover:text-black"
-                }`}
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </button>
-            ))}
+          <nav className="mt-8 space-y-1">
+            {navItems.map((item) => {
+              const link = (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openTab(item.id)}
+                    className={`nav-item nav-animate ${activeTab === item.id ? "active" : ""} ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                  >
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
+                </button>
+              );
+
+              return sidebarCollapsed ? (
+                <Tooltip key={item.id}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={16} className="rounded-lg bg-white font-semibold text-[var(--foreground)] shadow-[var(--shadow-lg)] border-[var(--border)]">
+                    {item.label}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              );
+            })}
           </nav>
 
           <div className="mt-auto space-y-5 pt-10">
-            <Button className="w-full rounded-2xl" onClick={openCreateProperty}>
-              <Plus className="h-4 w-4" />
-              Add Property
-            </Button>
+            <div className={`rounded-[20px] border border-[var(--sidebar-border)] bg-white/5 p-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                onClick={() => setCreateMenuOpen((current) => !current)}
+              >
+                <span className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Quick create
+                </span>
+                <ChevronDown className={`h-4 w-4 transition ${createMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                  createMenuOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div className="space-y-1 pt-1">
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openCreateProperty}>
+                      Add property
+                    </button>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openContractWizard}>
+                      Create contract
+                    </button>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openUserWizard}>
+                      Add user
+                    </button>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={() => openTab("notifications")}>
+                      New message
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <div className="space-y-2 border-t border-black/8 pt-4 text-[15px] text-black/60">
-              <button type="button" className="flex items-center gap-3 px-2 py-2">
-                <CircleHelp className="h-5 w-5" />
+            <div className={`space-y-2 border-t border-[var(--sidebar-border)] pt-4 text-[15px] text-[var(--sidebar-text)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+              <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-white/10 hover:text-white">
+                <CircleHelp className="h-5 w-5 shrink-0" />
                 <span>Support</span>
               </button>
               <button
                 type="button"
-                className="flex items-center gap-3 px-2 py-2"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[var(--danger)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
                 onClick={() => startTransition(() => void signOut({ callbackUrl: "/login" }))}
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-5 w-5 shrink-0" />
                 <span>Log out</span>
               </button>
             </div>
           </div>
         </aside>
 
+        {sidebarOpen ? <button type="button" aria-label="Close sidebar" className="fixed inset-0 z-30 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} /> : null}
+
         <main className="min-w-0 px-6 py-5 md:px-10 md:py-6">
-          <header className="flex flex-col gap-4 border-b border-black/6 pb-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="relative w-full max-w-[720px]">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-black/35" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={
-                  activeTab === "users"
-                    ? "Search users or roles..."
-                    : "Search by reference, name or tenant..."
-                }
-                className="h-12 rounded-2xl border-black/8 bg-white pl-12 shadow-none"
-              />
+          <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex w-full items-center gap-3 xl:max-w-[760px]">
+              <button type="button" className="rounded-2xl border border-[var(--border)] bg-white p-3 text-[var(--foreground)] lg:hidden shadow-[var(--shadow-sm)]" onClick={() => setSidebarOpen(true)}>
+                <Menu className="h-5 w-5" />
+              </button>
+              <div className="relative w-full max-w-[720px]">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={
+                    activeTab === "users"
+                      ? "Search users or roles..."
+                      : "Search by reference, name or tenant..."
+                  }
+                  className="h-12 rounded-2xl border-[var(--border)] bg-white pl-12 shadow-[var(--shadow-sm)] focus-visible:ring-[var(--ring)]"
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-4">
-              <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
-                <Bell className="h-5 w-5" />
+              <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--danger)] border-2 border-white" />
               </button>
-              <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
-                <CircleHelp className="h-5 w-5" />
+              <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
+                <CircleHelp className="h-4 w-4" />
               </button>
               <AvatarMenu user={user} onProfile={() => openTab("profile")} />
             </div>
           </header>
 
-          {error ? (
-            <div className="mt-5 rounded-2xl bg-[rgba(186,74,69,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-              {error}
-            </div>
-          ) : null}
-          {notice ? (
-            <div className="mt-5 rounded-2xl bg-[rgba(47,143,98,0.12)] px-4 py-3 text-sm text-[var(--success)]">
-              {notice}
+          {(notice || error) ? (
+            <div className="fixed right-6 top-6 z-50 max-w-sm rounded-2xl border border-black/8 bg-white px-5 py-4 text-sm shadow-[0_18px_55px_rgba(15,23,42,0.16)]">
+              <div className={`font-semibold ${error ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
+                {error ? "Action failed" : "Done"}
+              </div>
+              <div className="mt-1 text-black/60">{error ?? notice}</div>
             </div>
           ) : null}
 
-          <div className="mt-8 space-y-8">
+          <div ref={contentRef} className="mt-8 space-y-8">
             {activeTab === "dashboard" ? (
               <>
                 <section className="grid gap-5 xl:grid-cols-[repeat(3,minmax(0,1fr))_280px]">
-                  <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                    <div className="text-sm font-semibold uppercase tracking-[0.24em] text-black/35">
+                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(1,73,124,0.08)] text-[var(--primary)]">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
                       My Properties
                     </div>
                     <div className="mt-3 flex items-end gap-3">
-                      <div className="text-5xl font-bold tracking-tight">{logements.length}</div>
-                      <div className="pb-2 text-sm font-semibold text-[#0b9c45]">+ live inventory</div>
+                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{logements.length}</div>
+                      <div className="pb-1 text-sm font-semibold text-[var(--success)]">+ live inventory</div>
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                    <div className="text-sm font-semibold uppercase tracking-[0.24em] text-black/35">
+                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(44,125,160,0.08)] text-[var(--secondary)]">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
                       Active Contracts
                     </div>
                     <div className="mt-3 flex items-end gap-3">
-                      <div className="text-5xl font-bold tracking-tight">{activeContractsCount}</div>
-                      <div className="pb-2 text-sm font-semibold text-black/35">
+                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{activeContractsCount}</div>
+                      <div className="pb-1 text-sm font-semibold text-[var(--muted-foreground)]">
                         {contrats.length === 0
                           ? "No contracts yet"
                           : `${Math.round((activeContractsCount / contrats.length) * 100)}% occupancy`}
@@ -741,25 +1027,32 @@ export function AdminWorkspace({
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                    <div className="text-sm font-semibold uppercase tracking-[0.24em] text-black/35">
+                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(70,143,175,0.08)] text-[var(--success)]">
+                        <CreditCard className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
                       Collections
                     </div>
                     <div className="mt-3 flex items-end gap-2">
-                      <div className="text-5xl font-bold tracking-tight">{formatMoney(collectionsTotal)}</div>
-                      <div className="pb-2 text-base font-semibold text-black/45">MAD</div>
+                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{formatMoney(collectionsTotal)}</div>
+                      <div className="pb-1 text-sm font-semibold text-[var(--muted-foreground)]">MAD</div>
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] bg-black p-7 text-white">
+                  <div className="rounded-3xl stat-indigo p-7 text-white shadow-[var(--shadow-primary)] card-lift">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/55">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
                           Pending Visits
                         </div>
-                        <div className="mt-3 text-5xl font-bold tracking-tight">{pendingVisits}</div>
+                        <div className="mt-4 text-5xl font-bold tracking-tight">{pendingVisits}</div>
                       </div>
-                      <CalendarDays className="mt-3 h-8 w-8 text-white/45" />
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
+                        <CalendarDays className="h-6 w-6 text-white" />
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -767,18 +1060,18 @@ export function AdminWorkspace({
                 <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
                   <div>
                     <div className="mb-5 flex items-center justify-between">
-                      <h2 className="text-[21px] font-semibold tracking-tight">My Properties</h2>
+                      <h2 className="text-[21px] font-bold tracking-tight text-[var(--foreground)]">My Properties</h2>
                       <button
                         type="button"
-                        className="text-[15px] font-medium text-black/55"
+                        className="text-[14px] font-semibold text-[var(--primary)] hover:underline underline-offset-4"
                         onClick={() => openTab("properties")}
                       >
                         View All
                       </button>
                     </div>
 
-                    <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                      <div className="grid grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-black/6 px-8 py-5 text-xs font-semibold uppercase tracking-[0.24em] text-black/35">
+                    <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+                      <div className="grid grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                         <div>Ref</div>
                         <div>Property Name</div>
                         <div>Status</div>
@@ -790,24 +1083,24 @@ export function AdminWorkspace({
                           key={property.logement.id}
                           type="button"
                           onClick={() => openPropertyDetail(property.logement.id)}
-                          className="grid w-full grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-black/6 px-8 py-5 text-left transition hover:bg-black/[0.02] last:border-b-0"
+                          className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
                         >
-                          <div className="self-center text-[15px] text-black/55">{property.ref}</div>
+                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
                           <div className="flex items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f2efe8,#dde7f4)] text-sm font-semibold text-black/55">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
                               {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="text-[17px] font-semibold">{property.logement.adresse}</div>
-                              <div className="text-sm text-black/45">
+                              <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
+                              <div className="text-xs text-[var(--muted-foreground)]">
                                 {property.tenantName ?? property.logement.commune.nom}
                               </div>
                             </div>
                           </div>
                           <div className="self-center">
-                            <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
+                            <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
                           </div>
-                          <div className="self-center text-[15px] text-black/55">
+                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
                             {formatShortDate(property.nextEventDate)}
                           </div>
                         </button>
@@ -816,23 +1109,23 @@ export function AdminWorkspace({
                   </div>
 
                   <div>
-                    <h2 className="mb-5 text-[21px] font-semibold tracking-tight">Recent Activity</h2>
-                    <div className="rounded-[24px] bg-[#f6f6f4] p-7">
-                      <div className="space-y-7">
+                    <h2 className="mb-5 text-[21px] font-bold tracking-tight text-[var(--foreground)]">Recent Activity</h2>
+                    <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)]">
+                      <div className="space-y-6">
                         {recentActivity.map((item, index) => (
                           <div key={item.id} className="relative flex gap-4">
                             <div className="relative flex flex-col items-center">
-                              <div className="h-5 w-5 rounded-full border-4 border-black/70 bg-white" />
+                              <div className="z-10 h-4 w-4 rounded-full border-[3px] border-[var(--primary)] bg-white shadow-[0_0_0_2px_rgba(1,73,124,0.2)]" />
                               {index !== recentActivity.length - 1 ? (
-                                <div className="mt-1 h-full w-px bg-black/12" />
+                                <div className="absolute top-4 bottom-[-24px] w-0.5 bg-[var(--border)]" />
                               ) : null}
                             </div>
-                            <div className="pb-2">
-                              <div className="text-[17px] font-semibold">{item.title}</div>
-                              <div className="mt-1 text-[15px] leading-6 text-black/55">
+                            <div className="pb-1 pt-0.5">
+                              <div className="text-[15px] font-semibold text-[var(--foreground)]">{item.title}</div>
+                              <div className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
                                 {item.description}
                               </div>
-                              <div className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-black/28">
+                              <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
                                 {item.when}
                               </div>
                             </div>
@@ -899,7 +1192,7 @@ export function AdminWorkspace({
                   </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="grid gap-6">
                   <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
                     <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
                       <div>Ref</div>
@@ -913,9 +1206,8 @@ export function AdminWorkspace({
                     </div>
 
                     {filteredProperties.map((property) => (
-                      <button
+                      <div
                         key={property.logement.id}
-                        type="button"
                         onClick={() => openPropertyDetail(property.logement.id)}
                         className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
                       >
@@ -936,131 +1228,283 @@ export function AdminWorkspace({
                           </Avatar>
                           <span className="text-[15px]">{property.logement.agent.user.name}</span>
                         </div>
-                        <div className="flex items-center justify-center">
-                          <Ellipsis className="h-4 w-4 text-black/40" />
+                        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Property actions"
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
+                              >
+                                <Ellipsis className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem
+                                className="text-gray-600"
+                                onClick={() => openPropertyDetail(property.logement.id)}
+                              >
+                                <Eye className="h-4 w-4 text-gray-500" />
+                                Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-blue-700"
+                                onClick={() => beginEditProperty(property)}
+                              >
+                                <PencilLine className="h-4 w-4 text-blue-600" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-emerald-700"
+                                disabled={!property.latestContract}
+                                onClick={() => handleInvoice(property)}
+                              >
+                                <FileDown className="h-4 w-4 text-emerald-600" />
+                                Download PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-700 focus:text-red-700"
+                                onClick={() => void handleDeleteProperty(property)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
 
-                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
-                    <div className="text-[22px] font-semibold">
-                      {editingPropertyId ? "Edit Property" : "Add Property"}
-                    </div>
-                    <div className="mt-2 text-sm text-black/50">
-                      {editingPropertyId
-                        ? "Update the selected property directly from the dashboard."
-                        : "Publish a new property with a real agent, type, and commune."}
-                    </div>
+                  <Dialog open={propertyPanelOpen} onOpenChange={setPropertyPanelOpen}>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[780px]">
+                      <DialogHeader className="border-b border-black/8 px-6 py-4">
+                        <DialogTitle className="text-[22px] font-semibold">
+                          {editingPropertyId ? "Edit Property" : "Add Property"}
+                        </DialogTitle>
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                          Step {propertyWizardStep + 1} of 2
+                        </div>
+                      </DialogHeader>
 
-                    <div className="mt-6 space-y-4">
-                      <div className="space-y-2">
-                        <Label>Agent</Label>
-                        <select
-                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                          value={propertyForm.agent_id}
-                          onChange={(event) =>
-                            setPropertyForm((current) => ({ ...current, agent_id: event.target.value }))
-                          }
-                        >
-                          <option value="">Select agent</option>
-                          {agentUsers.map((entry) => (
-                            <option key={entry.id} value={entry.agent_profile?.id ?? ""}>
-                              {entry.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Address</Label>
-                        <Input
-                          value={propertyForm.adresse}
-                          onChange={(event) =>
-                            setPropertyForm((current) => ({ ...current, adresse: event.target.value }))
-                          }
+                      <div className="h-1 bg-black/8">
+                        <div
+                          className="h-full bg-[var(--primary)] transition-all duration-300"
+                          style={{ width: `${((propertyWizardStep + 1) / 2) * 100}%` }}
                         />
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Type</Label>
-                          <select
-                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                            value={propertyForm.type_logement_id}
-                            onChange={(event) =>
-                              setPropertyForm((current) => ({
-                                ...current,
-                                type_logement_id: event.target.value,
-                              }))
-                            }
+                      <div className="space-y-4 px-6 py-6">
+                        <div className="text-sm text-black/50">
+                          {editingPropertyId
+                            ? "Update the selected property directly from the dashboard."
+                            : "Publish a new property with a real agent, type, and commune."}
+                        </div>
+
+                        {propertyWizardStep === 0 ? (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Agent</Label>
+                              <select
+                                className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                                value={propertyForm.agent_id}
+                                onChange={(event) =>
+                                  setPropertyForm((current) => ({ ...current, agent_id: event.target.value }))
+                                }
+                              >
+                                <option value="">Select agent</option>
+                                {agentUsers.map((entry) => (
+                                  <option key={entry.id} value={entry.agent_profile?.id ?? ""}>
+                                    {entry.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Address</Label>
+                              <Input
+                                value={propertyForm.adresse}
+                                onChange={(event) =>
+                                  setPropertyForm((current) => ({ ...current, adresse: event.target.value }))
+                                }
+                              />
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>Type</Label>
+                                <select
+                                  className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                                  value={propertyForm.type_logement_id}
+                                  onChange={(event) =>
+                                    setPropertyForm((current) => ({
+                                      ...current,
+                                      type_logement_id: event.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">Select type</option>
+                                  {types.map((entry) => (
+                                    <option key={entry.id} value={entry.id}>
+                                      {entry.nom_type}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label>Commune</Label>
+                                <select
+                                  className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                                  value={propertyForm.commune_id}
+                                  onChange={(event) =>
+                                    setPropertyForm((current) => ({
+                                      ...current,
+                                      commune_id: event.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">Select commune</option>
+                                  {communes.map((entry) => (
+                                    <option key={entry.id} value={entry.id}>
+                                      {entry.nom}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>Area</Label>
+                                <Input
+                                  type="number"
+                                  value={propertyForm.superficie}
+                                  onChange={(event) =>
+                                    setPropertyForm((current) => ({ ...current, superficie: event.target.value }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Rent</Label>
+                                <Input
+                                  type="number"
+                                  value={propertyForm.loyer}
+                                  onChange={(event) =>
+                                    setPropertyForm((current) => ({ ...current, loyer: event.target.value }))
+                                  }
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-[20px] bg-[#f6f6f4] p-4">
+                              <Label>Attach tenant to this house</Label>
+                              <select
+                                className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                                value={propertyForm.locataire_id}
+                                onChange={(event) => setPropertyForm((current) => ({ ...current, locataire_id: event.target.value }))}
+                              >
+                                <option value="">Keep property vacant</option>
+                                {tenantUsers.map((entry) => (
+                                  <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
+                                    {entry.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {propertyForm.locataire_id ? (
+                                <div className="grid gap-3 md:grid-cols-3">
+                                  <Input
+                                    type="date"
+                                    value={propertyForm.contrat_date_debut}
+                                    onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_debut: event.target.value }))}
+                                  />
+                                  <Input
+                                    type="date"
+                                    value={propertyForm.contrat_date_fin}
+                                    onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_fin: event.target.value }))}
+                                  />
+                                  <select
+                                    className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                                    value={propertyForm.contrat_statut}
+                                    onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_statut: event.target.value }))}
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="pending">Pending</option>
+                                  </select>
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-3">
+                              <Label>House images</Label>
+                              <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-black/15 bg-[#fbfbfa] px-4 py-5 text-center transition hover:bg-[#f6f6f4]">
+                                <UploadCloud className="h-6 w-6 text-black/45" />
+                                <span className="mt-2 text-sm font-semibold">Upload property photos</span>
+                                <span className="mt-1 text-xs text-black/45">Large JPG, PNG, or WebP files are optimized automatically</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className="sr-only"
+                                  onChange={(event) => {
+                                    const files = Array.from(event.currentTarget.files ?? []);
+                                    event.currentTarget.value = "";
+                                    void handlePropertyImagesChange(files);
+                                  }}
+                                />
+                              </label>
+                              {preparingImages ? (
+                                <div className="text-xs text-black/50">Preparing images for upload...</div>
+                              ) : null}
+                              {propertyImageFiles.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {propertyImageFiles.map((file) => (
+                                    <span key={`${file.name}-${file.size}`} className="rounded-full bg-black/5 px-3 py-1 text-xs text-black/60">
+                                      {file.name} · {formatFileSize(file.size)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3 pt-2">
+                          <Button
+                            variant="outline"
+                            className="rounded-2xl"
+                            disabled={propertyWizardStep === 0 || busy}
+                            onClick={() => setPropertyWizardStep(0)}
                           >
-                            <option value="">Select type</option>
-                            {types.map((entry) => (
-                              <option key={entry.id} value={entry.id}>
-                                {entry.nom_type}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Commune</Label>
-                          <select
-                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                            value={propertyForm.commune_id}
-                            onChange={(event) =>
-                              setPropertyForm((current) => ({
-                                ...current,
-                                commune_id: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Select commune</option>
-                            {communes.map((entry) => (
-                              <option key={entry.id} value={entry.id}>
-                                {entry.nom}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Area</Label>
-                          <Input
-                            type="number"
-                            value={propertyForm.superficie}
-                            onChange={(event) =>
-                              setPropertyForm((current) => ({ ...current, superficie: event.target.value }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Rent</Label>
-                          <Input
-                            type="number"
-                            value={propertyForm.loyer}
-                            onChange={(event) =>
-                              setPropertyForm((current) => ({ ...current, loyer: event.target.value }))
-                            }
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <Button className="flex-1 rounded-2xl" disabled={busy} onClick={() => void handlePropertySubmit()}>
-                          {editingPropertyId ? "Save changes" : "Add property"}
-                        </Button>
-                        {editingPropertyId ? (
-                          <Button variant="outline" className="rounded-2xl" onClick={resetPropertyEditor}>
-                            Cancel
+                            Back
                           </Button>
-                        ) : null}
+                          {propertyWizardStep === 0 ? (
+                            <Button
+                              className="rounded-2xl"
+                              disabled={!propertyForm.agent_id || !propertyForm.type_logement_id || !propertyForm.commune_id || !propertyForm.adresse || busy}
+                              onClick={() => setPropertyWizardStep(1)}
+                            >
+                              Continue
+                            </Button>
+                          ) : (
+                            <div className="flex gap-3">
+                              {editingPropertyId ? (
+                                <Button variant="outline" className="rounded-2xl" onClick={resetPropertyEditor}>
+                                  Cancel
+                                </Button>
+                              ) : null}
+                              <Button className="rounded-2xl" disabled={busy || preparingImages} onClick={() => void handlePropertySubmit()}>
+                                {editingPropertyId ? "Save changes" : "Add property"}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </section>
             ) : null}
@@ -1113,6 +1557,13 @@ export function AdminWorkspace({
                     <div className="overflow-hidden rounded-[28px] border border-black/6 bg-white">
                       <div className="grid min-h-[360px] grid-cols-[minmax(0,1fr)_180px]">
                         <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_20%,#f4ead8,transparent_28%),linear-gradient(135deg,#c8d4e7,#f3efe7_58%,#d7e2d5)]">
+                          {selectedProperty.logement.images?.[0] ? (
+                            <img
+                              src={selectedProperty.logement.images[0]}
+                              alt={selectedProperty.logement.adresse}
+                              className="absolute inset-0 h-full w-full object-cover"
+                            />
+                          ) : null}
                           <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.06))]" />
                           <div className="absolute inset-x-8 top-8 flex items-center justify-between">
                             <Badge variant={toneForStatus(selectedProperty.status)}>{selectedProperty.status}</Badge>
@@ -1401,9 +1852,15 @@ export function AdminWorkspace({
                             <select
                               className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
                               value={paymentForm.contrat_id}
-                              onChange={(event) =>
-                                setPaymentForm((current) => ({ ...current, contrat_id: event.target.value }))
-                              }
+                              onChange={(event) => {
+                                const selected = contrats.find((entry) => String(entry.id) === event.target.value);
+                                setPaymentForm((current) => ({
+                                  ...current,
+                                  contrat_id: event.target.value,
+                                  montant: selected?.montant ?? current.montant,
+                                  statut: "awaiting_tenant_approval",
+                                }));
+                              }}
                             >
                               <option value="">Select contract</option>
                               {selectedProperty.activeContract ?? selectedProperty.latestContract ? (
@@ -1447,7 +1904,11 @@ export function AdminWorkspace({
                                 className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
                                 value={paymentForm.mode}
                                 onChange={(event) =>
-                                  setPaymentForm((current) => ({ ...current, mode: event.target.value }))
+                                  setPaymentForm((current) => ({
+                                    ...current,
+                                    mode: event.target.value,
+                                    statut: ["Virement", "Cash"].includes(event.target.value) ? "awaiting_tenant_approval" : current.statut,
+                                  }))
                                 }
                               >
                                 <option value="Virement">Virement</option>
@@ -1464,11 +1925,29 @@ export function AdminWorkspace({
                                   setPaymentForm((current) => ({ ...current, statut: event.target.value }))
                                 }
                               >
-                                <option value="paid">Paid</option>
+                                <option value="awaiting_tenant_approval">Needs tenant approval</option>
                                 <option value="pending">Pending</option>
+                                <option value="partial">Partial</option>
                               </select>
                             </div>
                           </div>
+                          {paymentForm.mode === "Virement" ? (
+                            <div className="rounded-[20px] bg-[#f6f6f4] p-4">
+                              <div className="text-sm font-semibold">Bank transfer details</div>
+                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                <Input value={paymentForm.rib} onChange={(event) => setPaymentForm((current) => ({ ...current, rib: event.target.value }))} placeholder="RIB / IBAN" />
+                                <Input value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transfer reference" />
+                              </div>
+                            </div>
+                          ) : null}
+                          {paymentForm.mode === "Cash" ? (
+                            <textarea
+                              className="min-h-20 w-full rounded-2xl border border-black/8 bg-[#f6f6f4] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                              value={paymentForm.cash_note}
+                              onChange={(event) => setPaymentForm((current) => ({ ...current, cash_note: event.target.value }))}
+                              placeholder="Cash receipt note: receiver, place, receipt number..."
+                            />
+                          ) : null}
                           <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleRecordPayment()}>
                             Save payment
                           </Button>
@@ -1481,167 +1960,42 @@ export function AdminWorkspace({
             ) : null}
 
             {activeTab === "contracts" ? (
-              <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-                <div className="space-y-6">
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-[42px] font-semibold tracking-tight">
                       Contracts <span className="align-middle text-base font-medium uppercase tracking-[0.18em] text-black/45">{activeContractsCount} active</span>
                     </h1>
                     <p className="mt-2 text-black/55">Review and create lease agreements across the portfolio.</p>
                   </div>
-
-                  <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                      <div>Ref</div>
-                      <div>Tenant</div>
-                      <div>Property</div>
-                      <div>Start</div>
-                      <div>End</div>
-                      <div>Rent</div>
-                    </div>
-                    {contrats.map((contrat) => (
-                      <div
-                        key={contrat.id}
-                        className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 border-t border-black/6 px-7 py-4"
-                      >
-                        <div className="self-center font-mono text-sm text-black/60">CTR-{String(contrat.id).padStart(4, "0")}</div>
-                        <div className="self-center font-semibold">{contrat.locataire.user.name}</div>
-                        <div className="self-center text-black/70">{contrat.logement.adresse}</div>
-                        <div className="self-center text-black/55">{formatShortDate(contrat.date_debut)}</div>
-                        <div className="self-center text-black/55">{formatShortDate(contrat.date_fin)}</div>
-                        <div className="self-center">{formatMoney(contrat.montant)} MAD</div>
-                      </div>
-                    ))}
-                  </div>
+                  <Button className="rounded-2xl" onClick={openContractWizard}>
+                    <Plus className="h-4 w-4" />
+                    Create contract
+                  </Button>
                 </div>
 
-                <div className="rounded-[24px] border border-black/6 bg-white p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[24px] font-semibold">New Contract</div>
-                      <div className="mt-1 text-sm font-semibold uppercase tracking-[0.2em] text-black/35">Draft CTR</div>
-                    </div>
-                    <FileText className="h-5 w-5 text-black/45" />
+                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
+                  <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                    <div>Ref</div>
+                    <div>Tenant</div>
+                    <div>Property</div>
+                    <div>Start</div>
+                    <div>End</div>
+                    <div>Rent</div>
                   </div>
-
-                  <div className="mt-6 space-y-4">
-                    <div className="space-y-2">
-                      <Label>Agent</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={contractForm.agent_id}
-                        onChange={(event) =>
-                          setContractForm((current) => ({ ...current, agent_id: event.target.value }))
-                        }
-                      >
-                        <option value="">Select agent</option>
-                        {agentUsers.map((entry) => (
-                          <option key={entry.id} value={entry.agent_profile?.id ?? ""}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
+                  {contrats.map((contrat) => (
+                    <div
+                      key={contrat.id}
+                      className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 border-t border-black/6 px-7 py-4"
+                    >
+                      <div className="self-center font-mono text-sm text-black/60">CTR-{String(contrat.id).padStart(4, "0")}</div>
+                      <div className="self-center font-semibold">{contrat.locataire.user.name}</div>
+                      <div className="self-center text-black/70">{contrat.logement.adresse}</div>
+                      <div className="self-center text-black/55">{formatShortDate(contrat.date_debut)}</div>
+                      <div className="self-center text-black/55">{formatShortDate(contrat.date_fin)}</div>
+                      <div className="self-center">{formatMoney(contrat.montant)} MAD</div>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>Primary tenant</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={contractForm.locataire_id}
-                        onChange={(event) =>
-                          setContractForm((current) => ({ ...current, locataire_id: event.target.value }))
-                        }
-                      >
-                        <option value="">Select tenant</option>
-                        {tenantUsers.map((entry) => (
-                          <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Property</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={contractForm.logement_id}
-                        onChange={(event) => {
-                          const selected = logements.find((entry) => String(entry.id) === event.target.value);
-                          setContractForm((current) => ({
-                            ...current,
-                            logement_id: event.target.value,
-                            agent_id: selected ? String(selected.agent.id) : current.agent_id,
-                            montant: selected?.loyer ?? current.montant,
-                          }));
-                        }}
-                      >
-                        <option value="">Select property</option>
-                        {logements.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {entry.adresse} • {entry.commune.nom}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Start date</Label>
-                        <Input
-                          type="date"
-                          value={contractForm.date_debut}
-                          onChange={(event) =>
-                            setContractForm((current) => ({ ...current, date_debut: event.target.value }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>End date</Label>
-                        <Input
-                          type="date"
-                          value={contractForm.date_fin}
-                          onChange={(event) =>
-                            setContractForm((current) => ({ ...current, date_fin: event.target.value }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="rounded-[20px] bg-[#f6f6f4] p-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-black/45">Financial terms</div>
-                      <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Monthly rent</Label>
-                          <Input
-                            type="number"
-                            value={contractForm.montant}
-                            onChange={(event) =>
-                              setContractForm((current) => ({ ...current, montant: event.target.value }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Status</Label>
-                          <select
-                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                            value={contractForm.statut}
-                            onChange={(event) =>
-                              setContractForm((current) => ({ ...current, statut: event.target.value }))
-                            }
-                          >
-                            <option value="active">Active</option>
-                            <option value="pending">Pending</option>
-                            <option value="expired">Expired</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleContractSubmit()}>
-                      Create Contract
-                    </Button>
-                  </div>
+                  ))}
                 </div>
               </section>
             ) : null}
@@ -1653,31 +2007,37 @@ export function AdminWorkspace({
                     <h1 className="text-[42px] font-semibold tracking-tight">Payments</h1>
                     <p className="mt-2 text-black/55">Validate rent collection and record incoming payments.</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl"
-                    onClick={() =>
-                      downloadTextFile(
-                        "payments.csv",
-                        ["Tenant,Property,Amount,Date,Mode,Status"]
-                          .concat(
-                            paiements.map((paiement) =>
-                              [
-                                paiement.contrat.locataire.user.name,
-                                paiement.contrat.logement.adresse,
-                                paiement.montant,
-                                paiement.date_paiement,
-                                paiement.mode,
-                                paiement.statut,
-                              ].join(","),
-                            ),
-                          )
-                          .join("\n"),
-                      )
-                    }
-                  >
-                    Export CSV
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl"
+                      onClick={() =>
+                        downloadTextFile(
+                          "payments.csv",
+                          ["Tenant,Property,Amount,Date,Mode,Status"]
+                            .concat(
+                              paiements.map((paiement) =>
+                                [
+                                  paiement.contrat.locataire.user.name,
+                                  paiement.contrat.logement.adresse,
+                                  paiement.montant,
+                                  paiement.date_paiement,
+                                  paiement.mode,
+                                  paiement.statut,
+                                ].join(","),
+                              ),
+                            )
+                            .join("\n"),
+                        )
+                      }
+                    >
+                      Export CSV
+                    </Button>
+                    <Button className="rounded-2xl" onClick={openPaymentWizard}>
+                      <Plus className="h-4 w-4" />
+                      Record payment
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid gap-5 xl:grid-cols-4">
@@ -1699,8 +2059,7 @@ export function AdminWorkspace({
                   </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                  <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
+                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
                     <div className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
                       <div>Tenant</div>
                       <div>Property</div>
@@ -1722,91 +2081,6 @@ export function AdminWorkspace({
                         </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="rounded-[24px] border border-black/6 bg-white p-6">
-                    <div className="text-[22px] font-semibold">Register Payment</div>
-                    <div className="mt-6 space-y-4">
-                      <div className="space-y-2">
-                        <Label>Contract</Label>
-                        <select
-                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                          value={paymentForm.contrat_id}
-                          onChange={(event) => {
-                            const selected = contrats.find((entry) => String(entry.id) === event.target.value);
-                            setPaymentForm((current) => ({
-                              ...current,
-                              contrat_id: event.target.value,
-                              montant: selected?.montant ?? current.montant,
-                            }));
-                          }}
-                        >
-                          <option value="">Select contract</option>
-                          {contrats.map((entry) => (
-                            <option key={entry.id} value={entry.id}>
-                              {entry.locataire.user.name} • {entry.logement.adresse}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Received amount</Label>
-                          <Input
-                            type="number"
-                            value={paymentForm.montant}
-                            onChange={(event) =>
-                              setPaymentForm((current) => ({ ...current, montant: event.target.value }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Payment date</Label>
-                          <Input
-                            type="date"
-                            value={paymentForm.date_paiement}
-                            onChange={(event) =>
-                              setPaymentForm((current) => ({ ...current, date_paiement: event.target.value }))
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Method</Label>
-                          <select
-                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                            value={paymentForm.mode}
-                            onChange={(event) =>
-                              setPaymentForm((current) => ({ ...current, mode: event.target.value }))
-                            }
-                          >
-                            <option value="Virement">Bank Transfer</option>
-                            <option value="Card">Credit Card</option>
-                            <option value="Check">Check</option>
-                            <option value="Cash">Cash</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Status</Label>
-                          <select
-                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                            value={paymentForm.statut}
-                            onChange={(event) =>
-                              setPaymentForm((current) => ({ ...current, statut: event.target.value }))
-                            }
-                          >
-                            <option value="paid">Paid</option>
-                            <option value="partial">Partial</option>
-                            <option value="pending">Pending</option>
-                          </select>
-                        </div>
-                      </div>
-                      <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleRecordPayment()}>
-                        Confirm Payment
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </section>
             ) : null}
@@ -1912,183 +2186,10 @@ export function AdminWorkspace({
                   ))}
 
                   <div className="ml-auto">
-                    <Button className="rounded-2xl" onClick={() => setUserForm((current) => ({ ...current, role: role === "super_admin" ? "admin" : "agent" }))}>
+                    <Button className="rounded-2xl" onClick={openUserWizard}>
                       <Plus className="h-4 w-4" />
                       Invite New User
                     </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-black/6 bg-white p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white">
-                      <UserPlus className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="text-[22px] font-semibold">Add user or agent</div>
-                      <div className="text-sm text-black/50">
-                        {role === "super_admin"
-                          ? "Create administrator accounts for the organization."
-                          : "Create agent and tenant accounts without leaving the dashboard."}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid gap-4 xl:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label>Role</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={userForm.role}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, role: event.target.value }))
-                        }
-                      >
-                        {role === "super_admin" ? (
-                          <option value="admin">Admin</option>
-                        ) : (
-                          <>
-                            <option value="agent">Agent</option>
-                            <option value="locataire">Tenant</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Full name</Label>
-                      <Input
-                        value={userForm.name}
-                        onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
-                        placeholder="Sarah Chen"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Email</Label>
-                      <Input
-                        type="email"
-                        value={userForm.email}
-                        onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
-                        placeholder="name@immoflow.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Phone</Label>
-                      <Input
-                        value={userForm.phone}
-                        onChange={(event) => setUserForm((current) => ({ ...current, phone: event.target.value }))}
-                        placeholder="+212 6 00 00 00 00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label>Username</Label>
-                      <Input
-                        value={userForm.login}
-                        onChange={(event) => setUserForm((current) => ({ ...current, login: event.target.value }))}
-                        placeholder="sarah.chen"
-                      />
-                    </div>
-                    {userForm.role === "agent" ? (
-                      <div className="space-y-2">
-                        <Label>Agent code</Label>
-                        <Input
-                          value={userForm.code_agent}
-                          onChange={(event) =>
-                            setUserForm((current) => ({ ...current, code_agent: event.target.value }))
-                          }
-                          placeholder="AGT-00024"
-                        />
-                      </div>
-                    ) : null}
-                    {userForm.role === "admin" ? (
-                      <div className="space-y-2">
-                        <Label>Access level</Label>
-                        <select
-                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                          value={userForm.niveau_acces}
-                          onChange={(event) =>
-                            setUserForm((current) => ({ ...current, niveau_acces: event.target.value }))
-                          }
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="manager">Manager</option>
-                          <option value="support">Support</option>
-                        </select>
-                      </div>
-                    ) : null}
-                    {userForm.role === "locataire" ? (
-                      <>
-                        <div className="space-y-2">
-                          <Label>Birth date</Label>
-                          <Input
-                            type="date"
-                            value={userForm.date_naissance}
-                            onChange={(event) =>
-                              setUserForm((current) => ({ ...current, date_naissance: event.target.value }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Address</Label>
-                          <Input
-                            value={userForm.adresse}
-                            onChange={(event) =>
-                              setUserForm((current) => ({ ...current, adresse: event.target.value }))
-                            }
-                            placeholder="Residence address"
-                          />
-                        </div>
-                      </>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={userForm.status}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, status: event.target.value }))
-                        }
-                      >
-                        <option value="active">Active</option>
-                        <option value="pending">Pending</option>
-                        <option value="suspended">Suspended</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
-                    <div className="space-y-2">
-                      <Label>Password</Label>
-                      <Input
-                        type="password"
-                        value={userForm.password}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                        placeholder="Minimum 8 characters"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Confirm password</Label>
-                      <Input
-                        type="password"
-                        value={userForm.password_confirmation}
-                        onChange={(event) =>
-                          setUserForm((current) => ({
-                            ...current,
-                            password_confirmation: event.target.value,
-                          }))
-                        }
-                        placeholder="Repeat password"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <Button className="h-12 w-full rounded-2xl" disabled={busy} onClick={() => void handleCreateUser()}>
-                        Create User
-                      </Button>
-                    </div>
                   </div>
                 </div>
 
@@ -2139,9 +2240,7 @@ export function AdminWorkspace({
                             <button
                               key={status}
                               type="button"
-                              className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                                entry.status === status ? "bg-black text-white" : "bg-black/5 text-black/65"
-                              }`}
+                              className={`rounded-xl px-3 py-2 text-xs font-semibold ${statusActionClass(status, entry.status === status)}`}
                               disabled={busy}
                               onClick={() => void handleStatusUpdate(entry.id, status, entry.name)}
                             >
@@ -2371,106 +2470,7 @@ export function AdminWorkspace({
             ) : null}
 
             {activeTab === "settings" ? (
-              <section className="grid gap-6 xl:grid-cols-2">
-                <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                  <div className="text-[24px] font-semibold">Create commune</div>
-                  <div className="mt-2 text-sm text-black/50">
-                    Admin-owned reference data for property records.
-                  </div>
-                  <div className="mt-6 space-y-4">
-                    <div className="space-y-2">
-                      <Label>Commune name</Label>
-                      <Input
-                        value={communeForm.nom}
-                        onChange={(event) =>
-                          setCommuneForm((current) => ({ ...current, nom: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Population</Label>
-                        <Input
-                          type="number"
-                          value={communeForm.nombre_habitants}
-                          onChange={(event) =>
-                            setCommuneForm((current) => ({
-                              ...current,
-                              nombre_habitants: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Distance to agency</Label>
-                        <Input
-                          type="number"
-                          value={communeForm.distance_agence}
-                          onChange={(event) =>
-                            setCommuneForm((current) => ({
-                              ...current,
-                              distance_agence: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                    <Button className="rounded-2xl" disabled={busy} onClick={() => void handleCreateCommune()}>
-                      <Landmark className="h-4 w-4" />
-                      Save commune
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                  <div className="text-[24px] font-semibold">Create housing type</div>
-                  <div className="mt-2 text-sm text-black/50">
-                    Used by agents when they publish a new property.
-                  </div>
-                  <div className="mt-6 space-y-4">
-                    <div className="space-y-2">
-                      <Label>Type label</Label>
-                      <Input
-                        value={typeForm.nom_type}
-                        onChange={(event) =>
-                          setTypeForm((current) => ({ ...current, nom_type: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Flat charges</Label>
-                      <Input
-                        type="number"
-                        value={typeForm.charge_forfaitaires}
-                        onChange={(event) =>
-                          setTypeForm((current) => ({
-                            ...current,
-                            charge_forfaitaires: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <Button className="rounded-2xl" disabled={busy} onClick={() => void handleCreateType()}>
-                      <Building2 className="h-4 w-4" />
-                      Save type
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-black/6 bg-white p-7">
-                  <div className="text-[24px] font-semibold">Existing communes</div>
-                  <div className="mt-6 space-y-3">
-                    {communes.map((entry) => (
-                      <div key={entry.id} className="rounded-2xl bg-[#f6f6f4] px-4 py-4">
-                        <div className="font-semibold">{entry.nom}</div>
-                        <div className="mt-1 text-sm text-black/50">
-                          {entry.nombre_habitants} habitants • {entry.distance_agence} km
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
+              <section className="grid gap-6 xl:grid-cols-1">
                 <div className="rounded-[24px] border border-black/6 bg-white p-7">
                   <div className="text-[24px] font-semibold">Existing housing types</div>
                   <div className="mt-6 space-y-3">
@@ -2486,6 +2486,550 @@ export function AdminWorkspace({
                 </div>
               </section>
             ) : null}
+
+            <Dialog open={contractWizardOpen} onOpenChange={setContractWizardOpen}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[760px]">
+                <DialogHeader className="border-b border-black/8 px-6 py-4">
+                  <DialogTitle className="text-[22px]">Create contract</DialogTitle>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                    Step {contractWizardStep + 1} of 2
+                  </div>
+                </DialogHeader>
+
+                <div className="h-1 bg-black/8">
+                  <div
+                    className="h-full bg-[var(--primary)] transition-all duration-300"
+                    style={{ width: `${((contractWizardStep + 1) / 2) * 100}%` }}
+                  />
+                </div>
+
+                <div className="space-y-4 px-6 py-6">
+                  {contractWizardStep === 0 ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Agent</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={contractForm.agent_id}
+                          onChange={(event) =>
+                            setContractForm((current) => ({ ...current, agent_id: event.target.value }))
+                          }
+                        >
+                          <option value="">Select agent</option>
+                          {agentUsers.map((entry) => (
+                            <option key={entry.id} value={entry.agent_profile?.id ?? ""}>
+                              {entry.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Primary tenant</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={contractForm.locataire_id}
+                          onChange={(event) => {
+                            const tenantId = event.target.value;
+                            const tenantContract = contrats.find((contrat) => String(contrat.locataire.id) === tenantId);
+                            setContractForm((current) => ({
+                              ...current,
+                              locataire_id: tenantId,
+                              logement_id: tenantContract ? String(tenantContract.logement.id) : "",
+                              agent_id: tenantContract ? String(tenantContract.agent.id) : current.agent_id,
+                              montant: tenantContract?.montant ?? current.montant,
+                              statut: tenantContract?.statut ?? current.statut,
+                            }));
+                          }}
+                        >
+                          <option value="">Select tenant</option>
+                          {tenantUsers.map((entry) => (
+                            <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
+                              {entry.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Property</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={contractForm.logement_id}
+                          onChange={(event) => {
+                            const selected = logements.find((entry) => String(entry.id) === event.target.value);
+                            setContractForm((current) => ({
+                              ...current,
+                              logement_id: event.target.value,
+                              agent_id: selected ? String(selected.agent.id) : current.agent_id,
+                              montant: selected?.loyer ?? current.montant,
+                              statut: selected ? "active" : current.statut,
+                            }));
+                          }}
+                        >
+                          <option value="">Select property</option>
+                          {contractPropertyOptions.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.adresse} • {entry.commune.nom}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Start date</Label>
+                          <Input
+                            type="date"
+                            value={contractForm.date_debut}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, date_debut: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>End date</Label>
+                          <Input
+                            type="date"
+                            value={contractForm.date_fin}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, date_fin: event.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Monthly rent</Label>
+                          <Input
+                            type="number"
+                            value={contractForm.montant}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, montant: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={contractForm.statut}
+                            onChange={(event) =>
+                              setContractForm((current) => ({ ...current, statut: event.target.value }))
+                            }
+                          >
+                            <option value="active">Active</option>
+                            <option value="pending">Pending</option>
+                            <option value="expired">Expired</option>
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl"
+                      disabled={contractWizardStep === 0 || busy}
+                      onClick={() => setContractWizardStep(0)}
+                    >
+                      Back
+                    </Button>
+                    {contractWizardStep === 0 ? (
+                      <Button
+                        className="rounded-2xl"
+                        disabled={!contractForm.agent_id || !contractForm.locataire_id || !contractForm.logement_id || busy}
+                        onClick={() => setContractWizardStep(1)}
+                      >
+                        Continue
+                      </Button>
+                    ) : (
+                      <Button
+                        className="rounded-2xl"
+                        disabled={!contractForm.date_debut || !contractForm.montant || busy}
+                        onClick={() => void handleContractSubmit()}
+                      >
+                        Create contract
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={paymentWizardOpen} onOpenChange={setPaymentWizardOpen}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[760px]">
+                <DialogHeader className="border-b border-black/8 px-6 py-4">
+                  <DialogTitle className="text-[22px]">Record payment</DialogTitle>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                    Step {paymentWizardStep + 1} of 2
+                  </div>
+                </DialogHeader>
+
+                <div className="h-1 bg-black/8">
+                  <div
+                    className="h-full bg-[var(--primary)] transition-all duration-300"
+                    style={{ width: `${((paymentWizardStep + 1) / 2) * 100}%` }}
+                  />
+                </div>
+
+                <div className="space-y-4 px-6 py-6">
+                  {paymentWizardStep === 0 ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Contract</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={paymentForm.contrat_id}
+                          onChange={(event) => {
+                            const selected = contrats.find((entry) => String(entry.id) === event.target.value);
+                            setPaymentForm((current) => ({
+                              ...current,
+                              contrat_id: event.target.value,
+                              montant: selected?.montant ?? current.montant,
+                              statut: "awaiting_tenant_approval",
+                            }));
+                          }}
+                        >
+                          <option value="">Select contract</option>
+                          {contrats.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.locataire.user.name} • {entry.logement.adresse}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Received amount</Label>
+                          <Input
+                            type="number"
+                            value={paymentForm.montant}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, montant: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Payment date</Label>
+                          <Input
+                            type="date"
+                            value={paymentForm.date_paiement}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, date_paiement: event.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Method</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={paymentForm.mode}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({
+                                ...current,
+                                mode: event.target.value,
+                                statut: ["Virement", "Cash"].includes(event.target.value) ? "awaiting_tenant_approval" : current.statut,
+                              }))
+                            }
+                          >
+                            <option value="Virement">Bank Transfer</option>
+                            <option value="Card">Credit Card</option>
+                            <option value="Check">Check</option>
+                            <option value="Cash">Cash</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={paymentForm.statut}
+                            onChange={(event) =>
+                              setPaymentForm((current) => ({ ...current, statut: event.target.value }))
+                            }
+                          >
+                            <option value="awaiting_tenant_approval">Needs tenant approval</option>
+                            <option value="partial">Partial</option>
+                            <option value="pending">Pending</option>
+                          </select>
+                        </div>
+                      </div>
+                      {paymentForm.mode === "Virement" ? (
+                        <div className="rounded-[20px] bg-[#f6f6f4] p-4">
+                          <div className="text-sm font-semibold">Bank transfer details</div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <Input value={paymentForm.rib} onChange={(event) => setPaymentForm((current) => ({ ...current, rib: event.target.value }))} placeholder="RIB / IBAN" />
+                            <Input value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transfer reference" />
+                          </div>
+                        </div>
+                      ) : null}
+                      {paymentForm.mode === "Cash" ? (
+                        <textarea
+                          className="min-h-20 w-full rounded-2xl border border-black/8 bg-[#f6f6f4] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                          value={paymentForm.cash_note}
+                          onChange={(event) => setPaymentForm((current) => ({ ...current, cash_note: event.target.value }))}
+                          placeholder="Cash receipt note: receiver, place, receipt number..."
+                        />
+                      ) : null}
+                      {selectedPaymentContract ? (
+                        <div className="rounded-[20px] border border-black/8 bg-white p-4 text-sm">
+                          <div className="font-semibold">{selectedPaymentContract.locataire.user.name}</div>
+                          <div className="mt-1 text-black/55">{selectedPaymentContract.logement.adresse}</div>
+                          <div className="mt-3 text-black/50">Expected rent: {formatMoney(selectedPaymentContract.montant)} MAD</div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl"
+                      disabled={paymentWizardStep === 0 || busy}
+                      onClick={() => setPaymentWizardStep(0)}
+                    >
+                      Back
+                    </Button>
+                    {paymentWizardStep === 0 ? (
+                      <Button
+                        className="rounded-2xl"
+                        disabled={!paymentForm.contrat_id || !paymentForm.montant || busy}
+                        onClick={() => setPaymentWizardStep(1)}
+                      >
+                        Continue
+                      </Button>
+                    ) : (
+                      <Button className="rounded-2xl" disabled={busy} onClick={() => void handleRecordPayment()}>
+                        Confirm payment
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={userWizardOpen} onOpenChange={setUserWizardOpen}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[760px]">
+                <DialogHeader className="border-b border-black/8 px-6 py-4">
+                  <DialogTitle className="flex items-center gap-3 text-[22px]">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-black text-white">
+                      <UserPlus className="h-5 w-5" />
+                    </span>
+                    Add user or agent
+                  </DialogTitle>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                    Step {userWizardStep + 1} of 3
+                  </div>
+                </DialogHeader>
+
+                <div className="h-1 bg-black/8">
+                  <div
+                    className="h-full bg-[var(--primary)] transition-all duration-300"
+                    style={{ width: `${((userWizardStep + 1) / 3) * 100}%` }}
+                  />
+                </div>
+
+                <div className="space-y-4 px-6 py-6">
+                  {userWizardStep === 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Role</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={userForm.role}
+                          onChange={(event) =>
+                            setUserForm((current) => ({ ...current, role: event.target.value }))
+                          }
+                        >
+                          {role === "super_admin" ? (
+                            <option value="admin">Admin</option>
+                          ) : (
+                            <>
+                              <option value="agent">Agent</option>
+                              <option value="locataire">Tenant</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <select
+                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                          value={userForm.status}
+                          onChange={(event) =>
+                            setUserForm((current) => ({ ...current, status: event.target.value }))
+                          }
+                        >
+                          <option value="active">Active</option>
+                          <option value="pending">Pending</option>
+                          <option value="suspended">Suspended</option>
+                        </select>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {userWizardStep === 1 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Full name</Label>
+                        <Input
+                          value={userForm.name}
+                          onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
+                          placeholder="Sarah Chen"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={userForm.email}
+                          onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
+                          placeholder="name@immoflow.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={userForm.phone}
+                          onChange={(event) => setUserForm((current) => ({ ...current, phone: event.target.value }))}
+                          placeholder="+212 6 00 00 00 00"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Username</Label>
+                        <Input
+                          value={userForm.login}
+                          onChange={(event) => setUserForm((current) => ({ ...current, login: event.target.value }))}
+                          placeholder="sarah.chen"
+                        />
+                      </div>
+                      {userForm.role === "agent" ? (
+                        <div className="space-y-2">
+                          <Label>Agent code</Label>
+                          <Input
+                            value={userForm.code_agent}
+                            onChange={(event) =>
+                              setUserForm((current) => ({ ...current, code_agent: event.target.value }))
+                            }
+                            placeholder="AGT-00024"
+                          />
+                        </div>
+                      ) : null}
+                      {userForm.role === "admin" ? (
+                        <div className="space-y-2">
+                          <Label>Access level</Label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
+                            value={userForm.niveau_acces}
+                            onChange={(event) =>
+                              setUserForm((current) => ({ ...current, niveau_acces: event.target.value }))
+                            }
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="support">Support</option>
+                          </select>
+                        </div>
+                      ) : null}
+                      {userForm.role === "locataire" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Birth date</Label>
+                            <Input
+                              type="date"
+                              value={userForm.date_naissance}
+                              onChange={(event) =>
+                                setUserForm((current) => ({ ...current, date_naissance: event.target.value }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input
+                              value={userForm.adresse}
+                              onChange={(event) =>
+                                setUserForm((current) => ({ ...current, adresse: event.target.value }))
+                              }
+                              placeholder="Residence address"
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {userWizardStep === 2 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Password</Label>
+                        <Input
+                          type="password"
+                          value={userForm.password}
+                          onChange={(event) =>
+                            setUserForm((current) => ({ ...current, password: event.target.value }))
+                          }
+                          placeholder="Minimum 8 characters"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Confirm password</Label>
+                        <Input
+                          type="password"
+                          value={userForm.password_confirmation}
+                          onChange={(event) =>
+                            setUserForm((current) => ({
+                              ...current,
+                              password_confirmation: event.target.value,
+                            }))
+                          }
+                          placeholder="Repeat password"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl"
+                      disabled={userWizardStep === 0 || busy}
+                      onClick={() => setUserWizardStep((current) => Math.max(0, current - 1))}
+                    >
+                      Back
+                    </Button>
+                    {userWizardStep < 2 ? (
+                      <Button
+                        className="rounded-2xl"
+                        disabled={
+                          busy ||
+                          (userWizardStep === 0 && !userForm.role) ||
+                          (userWizardStep === 1 && (!userForm.name || !userForm.email))
+                        }
+                        onClick={() => setUserWizardStep((current) => Math.min(2, current + 1))}
+                      >
+                        Continue
+                      </Button>
+                    ) : (
+                      <Button
+                        className="rounded-2xl"
+                        disabled={busy || !userForm.password || userForm.password !== userForm.password_confirmation}
+                        onClick={() => void handleCreateUser()}
+                      >
+                        Create User
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </main>
       </div>

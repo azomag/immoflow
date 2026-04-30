@@ -9,18 +9,20 @@ import {
   ArrowRight,
   Building2,
   Check,
-  Globe2,
+  Globe,
   Image as ImageIcon,
   ShieldCheck,
   Sparkles,
   UserRound,
+  KeyRound,
+  Mail,
 } from "lucide-react";
 import { registerFormWithBackend } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 type SignupChoice = "agent" | "locataire" | "administration";
 
@@ -29,30 +31,45 @@ const choices: Array<{
   label: string;
   description: string;
   icon: typeof UserRound;
+  iconClass: string;
 }> = [
   {
     id: "agent",
     label: "Agent",
     description: "Create properties, contracts, and collect payments.",
     icon: Building2,
+    iconClass: "bg-[linear-gradient(135deg,#01497c_0%,#2c7da0_100%)] text-white",
   },
   {
     id: "locataire",
     label: "Locataire",
     description: "Access contracts, residence details, and receipts.",
     icon: UserRound,
+    iconClass: "bg-[linear-gradient(135deg,#15803d_0%,#22c55e_100%)] text-white",
   },
   {
     id: "administration",
     label: "Administration",
     description: "Admins sign in here. Super admin creates admin accounts.",
     icon: ShieldCheck,
+    iconClass: "bg-[linear-gradient(135deg,#111827_0%,#000000_100%)] text-white",
   },
+];
+
+const decorativeFeatures = [
+  "Role-based dashboards",
+  "Google OAuth + credentials",
+  "Real-time contract signing",
+  "Automated PDF generation",
+  "Admin approval workflows",
+  "End-to-end data sync",
 ];
 
 export function AuthCard({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
-  const [choice, setChoice] = useState<SignupChoice | null>(mode === "login" ? "administration" : null);
+  const [choice, setChoice] = useState<SignupChoice | null>(
+    mode === "login" ? "administration" : null
+  );
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     first_name: "",
@@ -74,8 +91,12 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
 
   const loginMode = mode === "login" || choice === "administration";
   const selectedChoice = choices.find((item) => item.id === choice) ?? null;
-  const progress = mode === "signup" && !loginMode ? Math.round((step / 3) * 100) : 100;
-  const avatarPreview = useMemo(() => (avatarFile ? URL.createObjectURL(avatarFile) : null), [avatarFile]);
+  const progress =
+    mode === "signup" && !loginMode ? Math.round((step / 3) * 100) : 100;
+  const avatarPreview = useMemo(
+    () => (avatarFile ? URL.createObjectURL(avatarFile) : null),
+    [avatarFile]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -124,26 +145,25 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
   }
 
   function validateSignupStep() {
-    if (!choice || choice === "administration") {
-      return;
-    }
+    if (!choice || choice === "administration") return;
 
     if (step === 2) {
-      if (!fullName()) {
-        throw new Error("First name and last name are required.");
-      }
-
-      if (!form.login.trim() || !form.email.trim()) {
+      if (!fullName()) throw new Error("First name and last name are required.");
+      if (!form.login.trim() || !form.email.trim())
         throw new Error("Username and email are required.");
-      }
     }
 
-    if (step === 3 && (!form.password || form.password !== form.password_confirmation)) {
+    if (
+      step === 3 &&
+      (!form.password || form.password !== form.password_confirmation)
+    ) {
       throw new Error("Password confirmation must match.");
     }
   }
 
-  async function handleCredentialSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleCredentialSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
     resetMessages();
 
@@ -158,12 +178,10 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
 
         if (result?.error) {
           const normalizedError = normalizeAuthError(result.error);
-
           if (normalizedError.toLowerCase().includes("awaiting approval")) {
             router.push("/pending");
             return;
           }
-
           throw new Error(normalizedError);
         }
 
@@ -181,9 +199,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
 
       setPending(true);
       const signupRole = choice;
-      if (!signupRole) {
-        throw new Error("Choose Agent or Locataire to create an account.");
-      }
+      if (!signupRole) throw new Error("Choose Agent or Locataire to create an account.");
 
       const payload = new FormData();
       payload.set("name", fullName());
@@ -195,12 +211,8 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
       payload.set("password_confirmation", form.password_confirmation);
 
       if (signupRole === "locataire") {
-        if (form.date_naissance) {
-          payload.set("date_naissance", form.date_naissance);
-        }
-        if (form.adresse.trim()) {
-          payload.set("adresse", form.adresse.trim());
-        }
+        if (form.date_naissance) payload.set("date_naissance", form.date_naissance);
+        if (form.adresse.trim()) payload.set("adresse", form.adresse.trim());
       }
 
       if (signupRole === "agent" && avatarFile) {
@@ -220,14 +232,16 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
         redirect: false,
       });
 
-      if (result?.error) {
-        throw new Error(normalizeAuthError(result.error));
-      }
+      if (result?.error) throw new Error(normalizeAuthError(result.error));
 
       router.push("/dashboard");
       router.refresh();
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : "Authentication failed.");
+      setError(
+        submissionError instanceof Error
+          ? submissionError.message
+          : "Authentication failed."
+      );
     } finally {
       setPending(false);
     }
@@ -239,328 +253,475 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
       setError("Google sign-in is not enabled for this frontend session.");
       return;
     }
-
-    localStorage.setItem("immoflow-auth-role", choice === "locataire" ? "locataire" : "agent");
-
+    localStorage.setItem(
+      "immoflow-auth-role",
+      choice === "locataire" ? "locataire" : "agent"
+    );
     startTransition(() => {
-      void signIn("google", {
-        callbackUrl: `/auth/complete?flow=${flow}`,
-      });
+      void signIn("google", { callbackUrl: `/auth/complete?flow=${flow}` });
     });
   }
 
   return (
-    <Card className="w-full max-w-2xl border-white/70 bg-white/95 shadow-[0_35px_90px_rgba(20,16,10,0.08)]">
-      <CardHeader className="space-y-6 pb-3">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)] text-[var(--primary-foreground)]">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <Badge variant="warning">{loginMode ? "Secure access" : `Step ${step} of 3`}</Badge>
-              <CardTitle className="mt-3 text-[40px] leading-[1.05] tracking-tight">
-                {loginMode
-                  ? "Sign in to your workspace."
-                  : step === 1
-                    ? "Choose your workspace."
-                    : selectedChoice?.id === "agent"
-                      ? "Create your agent profile."
-                      : "Create your tenant profile."}
-              </CardTitle>
-            </div>
+    <div className="flex min-h-screen">
+      {/* ── Left Decorative Panel ── */}
+      <div className="hidden lg:flex lg:w-[44%] flex-col justify-between bg-[#eaf6fb] p-10 xl:p-14">
+        {/* Logo */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.4)]">
+            <Building2 className="h-5 w-5" />
           </div>
-          <div className="rounded-2xl border border-black/6 bg-[#faf8f4] px-4 py-3 text-sm text-[var(--muted-foreground)]">
-            ImmoFlow
+          <span className="text-[18px] font-bold text-black">ImmoFlow</span>
+        </div>
+
+        {/* Hero copy */}
+        <div>
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/85 px-4 py-1.5 text-sm font-medium text-black/70">
+            <Sparkles className="h-3.5 w-3.5 text-[var(--secondary)]" />
+            Real Estate Management Platform
+          </div>
+          <h2 className="text-4xl font-bold leading-tight text-black xl:text-5xl">
+            Manage every
+            <br />
+            <span className="text-[#01497c]">property workflow</span>
+            <br />
+            in one place.
+          </h2>
+          <p className="mt-5 text-base leading-7 text-black/60">
+            Bring together admins, agents, and tenants under a unified platform
+            with real-time data, role-based access, and automated workflows.
+          </p>
+
+          {/* Feature list */}
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {decorativeFeatures.map((f) => (
+              <div key={f} className="flex items-center gap-2 text-sm text-black/60">
+                <div className="h-1.5 w-1.5 rounded-full bg-[#01497c]" />
+                {f}
+              </div>
+            ))}
           </div>
         </div>
 
-        <CardDescription className="max-w-2xl text-[15px] leading-7">
-          {loginMode
-            ? "One global login for super admin, admins, agents, and locataires."
-            : "Pick an account type first. Administration is login-only because admins are created by the super admin dashboard."}
-        </CardDescription>
+        {/* Bottom quote */}
+        <div className="rounded-2xl border border-black/10 bg-white/55 p-5">
+          <p className="text-sm leading-6 text-black/60">
+            "Google sign-in syncs the authenticated profile into the Laravel
+            user table, then the frontend loads the exact role and permissions
+            assigned there."
+          </p>
+        </div>
+      </div>
 
-        {mode === "signup" && !loginMode ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-black/50">
-              <span>Step {step} of 3</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-black/8">
-              <div className="h-full rounded-full bg-black transition-all" style={{ width: `${progress}%` }} />
-            </div>
+      {/* ── Right Form Panel ── */}
+      <div className="flex flex-1 flex-col items-center justify-center bg-[var(--background)] px-6 py-10 md:px-12 lg:px-16">
+        {/* Mobile logo */}
+        <div className="mb-8 flex items-center gap-3 lg:hidden">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl icon-indigo">
+            <Building2 className="h-4 w-4" />
           </div>
-        ) : null}
-      </CardHeader>
+          <span className="text-lg font-bold">ImmoFlow</span>
+        </div>
 
-      <CardContent className="space-y-6">
-        {mode === "signup" && step === 1 && !loginMode ? (
-          <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              {choices.map((item) => (
+        <div className="w-full max-w-md">
+          {/* Step badge */}
+          <div className="mb-4 flex items-center gap-3">
+            <Badge className="rounded-full border-[rgba(1,73,124,0.24)] bg-[var(--primary-glow)] text-[var(--primary)] text-xs font-semibold">
+              {loginMode ? "Secure access" : `Step ${step} of 3`}
+            </Badge>
+          </div>
+
+          {/* Title */}
+          <h1 className="text-[34px] font-bold tracking-tight text-[var(--foreground)]">
+            {loginMode
+              ? "Sign in to your workspace."
+              : step === 1
+              ? "Choose your workspace."
+              : selectedChoice?.id === "agent"
+              ? "Create your agent profile."
+              : "Create your tenant profile."}
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-black/65">
+            {loginMode
+              ? "One global login for super admin, admins, agents, and locataires."
+              : "Pick an account type first. Administration is login-only."}
+          </p>
+
+          {/* Progress bar */}
+          {mode === "signup" && !loginMode ? (
+            <div className="mt-5 space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-black/60">
+                <span>Step {step} of 3</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--muted)]">
+                <div
+                  className="h-full rounded-full bg-[var(--primary)] transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <Separator className="my-6" />
+
+          {/* ── Step 1: Role selector ── */}
+          {mode === "signup" && step === 1 && !loginMode ? (
+            <div className="space-y-5 animate-fade-in-up">
+              <div className="grid gap-3">
+                {choices.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectChoice(item.id)}
+                    className="group flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 text-left transition-all hover:border-[rgba(1,73,124,0.3)] hover:shadow-[0_4px_16px_rgba(1,73,124,0.08)] hover:-translate-y-0.5"
+                  >
+                    <span
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.iconClass} shadow-[0_4px_12px_rgba(0,0,0,0.16)] transition-transform group-hover:scale-105`}
+                    >
+                      <item.icon className="h-6 w-6" />
+                    </span>
+                    <span className="flex-1">
+                      <span className="block font-semibold text-[var(--foreground)]">
+                        {item.label}
+                      </span>
+                      <span className="mt-0.5 block text-sm text-black/65">
+                        {item.description}
+                      </span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover:opacity-100" />
+                  </button>
+                ))}
+              </div>
+              <div className="text-center text-sm text-black/60">
+                Already have an account?{" "}
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => selectChoice(item.id)}
-                  className="rounded-[22px] border border-black/10 bg-white p-5 text-center transition hover:-translate-y-0.5 hover:border-black/30 hover:shadow-[0_16px_32px_rgba(0,0,0,0.08)]"
+                  className="font-semibold text-[var(--primary)] underline-offset-4 hover:underline"
+                  onClick={() => selectChoice("administration")}
                 >
-                  <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black text-white">
-                    <item.icon className="h-6 w-6" />
-                  </span>
-                  <span className="mt-4 block text-lg font-semibold">{item.label}</span>
-                  <span className="mt-2 block text-sm leading-6 text-black/55">{item.description}</span>
+                  Sign in
                 </button>
-              ))}
+              </div>
             </div>
-            <div className="text-center text-sm text-black/45">
-              Already have an account?{" "}
-              <button type="button" className="font-semibold text-black" onClick={() => selectChoice("administration")}>
-                Login
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form className="space-y-5" onSubmit={handleCredentialSubmit}>
-            {mode === "signup" && !loginMode ? (
-              <>
+          ) : (
+            <form className="space-y-5 animate-fade-in-up" onSubmit={handleCredentialSubmit}>
+              {/* Back button */}
+              {mode === "signup" && !loginMode ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-black/55"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                   onClick={() => {
                     resetMessages();
                     setStep((current) => Math.max(1, current - 1));
-                    if (step === 2) {
-                      setChoice(null);
-                    }
+                    if (step === 2) setChoice(null);
                   }}
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back
                 </button>
-
-                {step === 2 ? (
-                  <>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="first_name">First Name</Label>
-                        <Input
-                          id="first_name"
-                          value={form.first_name}
-                          onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="last_name">Last Name</Label>
-                        <Input
-                          id="last_name"
-                          value={form.last_name}
-                          onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="login">Username</Label>
-                        <Input
-                          id="login"
-                          value={form.login}
-                          onChange={(event) => setForm((current) => ({ ...current, login: event.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={form.email}
-                          onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input
-                          id="phone"
-                          value={form.phone}
-                          onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-                        />
-                      </div>
-                      {choice === "agent" ? (
-                        <div className="space-y-2">
-                          <Label htmlFor="avatar_image">Profile Image</Label>
-                          <label className="flex h-12 cursor-pointer items-center gap-3 rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm">
-                            <ImageIcon className="h-4 w-4 text-black/45" />
-                            <span className="truncate">{avatarFile?.name ?? "Upload image"}</span>
-                            <input
-                              id="avatar_image"
-                              type="file"
-                              accept="image/*"
-                              className="sr-only"
-                              onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Label htmlFor="date_naissance">Birth Date</Label>
-                          <Input
-                            id="date_naissance"
-                            type="date"
-                            value={form.date_naissance}
-                            onChange={(event) => setForm((current) => ({ ...current, date_naissance: event.target.value }))}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {choice === "locataire" ? (
-                      <div className="space-y-2">
-                        <Label htmlFor="adresse">Address</Label>
-                        <Input
-                          id="adresse"
-                          value={form.adresse}
-                          onChange={(event) => setForm((current) => ({ ...current, adresse: event.target.value }))}
-                        />
-                      </div>
-                    ) : null}
-
-                    {avatarPreview ? (
-                      <div
-                        aria-label="Profile preview"
-                        className="h-24 w-24 rounded-2xl bg-cover bg-center"
-                        style={{ backgroundImage: `url(${avatarPreview})` }}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <div className="rounded-[22px] border border-black/8 bg-[#faf8f4] p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white">
-                          <Check className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <div className="font-semibold">{fullName()}</div>
-                          <div className="text-sm text-black/55">
-                            {selectedChoice?.label} • {form.email}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          value={form.password}
-                          onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="password_confirmation">Confirm Password</Label>
-                        <Input
-                          id="password_confirmation"
-                          type="password"
-                          value={form.password_confirmation}
-                          onChange={(event) => setForm((current) => ({ ...current, password_confirmation: event.target.value }))}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="identifier">Email or Username</Label>
-                  <Input
-                    id="identifier"
-                    value={form.identifier}
-                    onChange={(event) => setForm((current) => ({ ...current, identifier: event.target.value }))}
-                    placeholder="name@company.com or username"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                    required
-                  />
-                </div>
-              </>
-            )}
-
-            {message ? (
-              <div className="rounded-2xl bg-[rgba(47,143,98,0.12)] px-4 py-3 text-sm text-[var(--success)]">
-                {message}
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="rounded-2xl bg-[rgba(186,74,69,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-                {error}
-              </div>
-            ) : null}
-
-            <div className="grid gap-3 pt-2">
-              <Button type="submit" size="lg" disabled={pending} className="rounded-2xl">
-                {loginMode ? <UserRound className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-                {loginMode ? "Sign in" : step === 3 ? `Create ${selectedChoice?.label} account` : "Continue"}
-              </Button>
-
-              {googleAvailable ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="rounded-2xl"
-                  onClick={() => handleGoogle(loginMode ? "login" : "signup")}
-                >
-                  <Globe2 className="h-4 w-4" />
-                  Continue with Google
-                </Button>
               ) : null}
-            </div>
-          </form>
-        )}
 
-        <div className="rounded-[22px] border border-black/6 bg-[#faf8f4] px-4 py-4 text-sm text-[var(--muted-foreground)]">
-          <div className="flex items-start gap-3">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[var(--secondary)]" />
-            <div>
-              {loginMode
-                ? "Use the same login page for super admin, admin, agent, and locataire."
-                : "Agent accounts wait for admin approval. Locataire accounts open their portal immediately."}
-            </div>
+              {/* Step 2 fields */}
+              {mode === "signup" && !loginMode && step === 2 ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="first_name">First Name</Label>
+                      <Input
+                        id="first_name"
+                        value={form.first_name}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, first_name: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="last_name">Last Name</Label>
+                      <Input
+                        id="last_name"
+                        value={form.last_name}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, last_name: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="login">Username</Label>
+                      <Input
+                        id="login"
+                        value={form.login}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, login: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={form.email}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, email: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input
+                        id="phone"
+                        value={form.phone}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, phone: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                      />
+                    </div>
+                    {choice === "agent" ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="avatar_image">Profile Image</Label>
+                        <label className="flex h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm text-[var(--muted-foreground)] hover:border-[var(--border-strong)] transition-colors">
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="truncate">
+                            {avatarFile?.name ?? "Upload image"}
+                          </span>
+                          <input
+                            id="avatar_image"
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) =>
+                              setAvatarFile(e.target.files?.[0] ?? null)
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label htmlFor="date_naissance">Birth Date</Label>
+                        <Input
+                          id="date_naissance"
+                          type="date"
+                          value={form.date_naissance}
+                          onChange={(e) =>
+                            setForm((c) => ({
+                              ...c,
+                              date_naissance: e.target.value,
+                            }))
+                          }
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {choice === "locataire" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="adresse">Address</Label>
+                      <Input
+                        id="adresse"
+                        value={form.adresse}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, adresse: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                      />
+                    </div>
+                  ) : null}
+                  {avatarPreview ? (
+                    <div
+                      aria-label="Profile preview"
+                      className="h-20 w-20 rounded-2xl bg-cover bg-center shadow-[var(--shadow-sm)]"
+                      style={{ backgroundImage: `url(${avatarPreview})` }}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {/* Step 3 — password + review */}
+              {mode === "signup" && !loginMode && step === 3 ? (
+                <>
+                  <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl icon-indigo shrink-0">
+                      <Check className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-[var(--foreground)]">
+                        {fullName()}
+                      </div>
+                      <div className="text-sm text-[var(--muted-foreground)]">
+                        {selectedChoice?.label} · {form.email}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={form.password}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, password: e.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password_confirmation">
+                        Confirm Password
+                      </Label>
+                      <Input
+                        id="password_confirmation"
+                        type="password"
+                        value={form.password_confirmation}
+                        onChange={(e) =>
+                          setForm((c) => ({
+                            ...c,
+                            password_confirmation: e.target.value,
+                          }))
+                        }
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {/* Login fields */}
+              {loginMode ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="identifier">Email or Username</Label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                      <Input
+                        id="identifier"
+                        value={form.identifier}
+                        onChange={(e) =>
+                          setForm((c) => ({
+                            ...c,
+                            identifier: e.target.value,
+                          }))
+                        }
+                        placeholder="name@company.com or username"
+                        className="h-11 rounded-xl pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                      <Input
+                        id="password"
+                        type="password"
+                        value={form.password}
+                        onChange={(e) =>
+                          setForm((c) => ({ ...c, password: e.target.value }))
+                        }
+                        className="h-11 rounded-xl pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {/* Status messages */}
+              {message ? (
+                <div className="rounded-xl border border-[rgba(44,125,160,0.2)] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
+                  {message}
+                </div>
+              ) : null}
+              {error ? (
+                <div className="rounded-xl border border-[rgba(1,42,74,0.2)] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
+                  {error}
+                </div>
+              ) : null}
+
+              {/* Action buttons */}
+              <div className="grid gap-3 pt-1">
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={pending}
+                  className="h-12 w-full rounded-xl bg-[var(--primary)] font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)] disabled:opacity-60"
+                >
+                  {loginMode ? (
+                    <UserRound className="h-4 w-4" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4" />
+                  )}
+                  {loginMode
+                    ? pending
+                      ? "Signing in…"
+                      : "Sign in"
+                    : step === 3
+                    ? pending
+                      ? "Creating…"
+                      : `Create ${selectedChoice?.label} account`
+                    : "Continue"}
+                </Button>
+
+                {googleAvailable ? (
+                  <>
+                    <div className="relative flex items-center gap-3">
+                      <div className="h-px flex-1 bg-[var(--border)]" />
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                        or
+                      </span>
+                      <div className="h-px flex-1 bg-[var(--border)]" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="h-12 w-full rounded-xl font-semibold hover:bg-white"
+                      onClick={() =>
+                        handleGoogle(loginMode ? "login" : "signup")
+                      }
+                    >
+                      <Globe className="h-4 w-4" />
+                      Continue with Google
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </form>
+          )}
+
+          {/* Footer link */}
+          <Separator className="my-6" />
+          <div className="flex items-center justify-between text-sm text-[var(--muted-foreground)]">
+            <span>
+              {loginMode ? "Need a new account?" : "Already registered?"}
+            </span>
+            <Link
+              href={loginMode ? "/signup" : "/login"}
+              className="inline-flex items-center gap-1.5 font-semibold text-[var(--primary)] underline-offset-4 hover:underline"
+            >
+              {loginMode ? "Choose account type" : "Go to login"}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
-
-        <div className="flex items-center justify-between border-t border-black/8 pt-5 text-sm text-[var(--muted-foreground)]">
-          <span>{loginMode ? "Need a new account?" : "Already registered?"}</span>
-          <Link
-            href={loginMode ? "/signup" : "/login"}
-            className="inline-flex items-center gap-2 font-semibold text-[var(--foreground)]"
-          >
-            <span>{loginMode ? "Choose account type" : "Go to login"}</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

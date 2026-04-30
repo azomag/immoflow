@@ -84,7 +84,7 @@ export function toneForStatus(status: string): Tone {
     return "success";
   }
 
-  if (["pending", "listed"].includes(normalized)) {
+  if (["pending", "listed", "awaiting_tenant_approval", "partial"].includes(normalized)) {
     return "warning";
   }
 

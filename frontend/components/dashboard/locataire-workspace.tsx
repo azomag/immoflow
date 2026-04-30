@@ -1,24 +1,29 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   Bell,
   CalendarClock,
   CircleHelp,
   Download,
+  Eye,
   FileSignature,
+  Home,
   LogOut,
+  X,
 } from "lucide-react";
+import { gsap } from "gsap";
+import Swal from "sweetalert2";
 import type { AuthenticatedUser, Contrat, Logement, NotificationRecord, Paiement, UserRecord } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { downloadContractPdf, downloadReceiptPdf } from "@/lib/document-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  downloadTextFile,
   formatLongDate,
   formatMoney,
   formatShortDate,
@@ -60,6 +65,13 @@ export function LocataireWorkspace({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [propertyDetailsOpen, setPropertyDetailsOpen] = useState(false);
+  const [contractDetailsOpen, setContractDetailsOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
+  const [signatureEmpty, setSignatureEmpty] = useState(true);
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
 
   const sortedContracts = useMemo(() => sortByNewest(contrats), [contrats]);
   const sortedPayments = useMemo(() => sortByNewest(paiements), [paiements]);
@@ -76,10 +88,52 @@ export function LocataireWorkspace({
 
   const currentResidence =
     logements.find((logement) => logement.id === activeContract?.logement.id) ?? null;
+  const documentContract = activeContract ?? pendingContract;
+  const documentProperty =
+    logements.find((logement) => logement.id === documentContract?.logement.id) ?? currentResidence;
 
   const latestPayment = sortedPayments[0] ?? null;
   const pendingPayment =
-    sortedPayments.find((paiement) => paiement.statut.toLowerCase() === "pending") ?? null;
+    sortedPayments.find((paiement) => ["pending", "awaiting_tenant_approval"].includes(paiement.statut.toLowerCase())) ?? null;
+
+  useEffect(() => {
+    if (!pageRef.current) {
+      return;
+    }
+
+    gsap.fromTo(
+      pageRef.current.querySelectorAll("[data-animate='section']"),
+      { y: 16, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.36, ease: "power2.out", stagger: 0.04 },
+    );
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!signatureOpen) {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    context.scale(ratio, ratio);
+    context.lineWidth = 2.5;
+    context.lineCap = "round";
+    context.strokeStyle = "#171411";
+    context.clearRect(0, 0, rect.width, rect.height);
+    setSignatureEmpty(true);
+  }, [signatureOpen]);
 
   async function runMutation(action: () => Promise<void>) {
     setBusy(true);
@@ -96,83 +150,157 @@ export function LocataireWorkspace({
     }
   }
 
-  async function handleSignContract() {
+  function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }
+
+  async function beginSignatureFlow() {
     if (!pendingContract) {
       setError("No pending contract to sign.");
       return;
     }
 
+    const first = await Swal.fire({
+      title: "Read before signing",
+      text: "A signature validates this rental contract in your tenant account.",
+      icon: "info",
+      showCancelButton: true,
+      confirmButtonText: "I understand",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#171411",
+    });
+    if (!first.isConfirmed) return;
+
+    const second = await Swal.fire({
+      title: "Check the property",
+      text: `You are signing for ${pendingContract.logement.adresse}.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Property is correct",
+      cancelButtonText: "Go back",
+      confirmButtonColor: "#171411",
+    });
+    if (!second.isConfirmed) return;
+
+    const third = await Swal.fire({
+      title: "Final confirmation",
+      text: "Next step opens a signature pad. Draw your signature with your mouse, pen, or finger.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Open signature pad",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#171411",
+    });
+    if (third.isConfirmed) {
+      setSignatureOpen(true);
+    }
+  }
+
+  async function handleSignContract() {
+    if (!pendingContract || !canvasRef.current) {
+      setError("No pending contract to sign.");
+      return;
+    }
+
+    if (signatureEmpty) {
+      await Swal.fire({
+        title: "Signature required",
+        text: "Please draw your signature before confirming the contract.",
+        icon: "error",
+        confirmButtonColor: "#171411",
+      });
+      return;
+    }
+
+    const signatureData = canvasRef.current.toDataURL("image/png");
+
     await runMutation(async () => {
       await backendRequest(`/api/contrats/${pendingContract.id}/sign`, {
         method: "POST",
+        body: JSON.stringify({ signature_data: signatureData }),
       }, token);
+      setSignatureOpen(false);
       setNotice("Contract signed.");
+      await Swal.fire({
+        title: "Contract signed",
+        text: "Your signature was saved on the contract.",
+        icon: "success",
+        confirmButtonColor: "#171411",
+      });
+    });
+  }
+
+  async function handleApprovePayment(payment: Paiement) {
+    const result = await Swal.fire({
+      title: "Approve payment?",
+      text: `Confirm that you recognize this ${formatMoney(payment.montant)} MAD payment.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Approve payment",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#171411",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await runMutation(async () => {
+      await backendRequest(`/api/paiements/${payment.id}/approve`, {
+        method: "PATCH",
+      }, token);
+      setNotice("Payment approved.");
     });
   }
 
   function handleReceiptDownload(payment: Paiement) {
-    downloadTextFile(
-      `receipt-${payment.id}.txt`,
-      [
-        "ImmoFlow Receipt",
-        `Payment ID: ${payment.id}`,
-        `Property: ${payment.contrat.logement.adresse}`,
-        `Date: ${formatLongDate(payment.date_paiement)}`,
-        `Amount: ${formatMoney(payment.montant)} MAD`,
-        `Mode: ${payment.mode}`,
-        `Status: ${payment.statut}`,
-      ].join("\n"),
-    );
+    downloadReceiptPdf(payment);
   }
 
   function handleDocumentDownload() {
-    const targetContract = activeContract ?? pendingContract;
+    const targetContract = documentContract;
     if (!targetContract) {
       setError("No contract available.");
       return;
     }
 
-    downloadTextFile(
-      `contract-${targetContract.id}.txt`,
-      [
-        "ImmoFlow Contract Summary",
-        `Contract ID: ${targetContract.id}`,
-        `Property: ${targetContract.logement.adresse}`,
-        `Agent: ${targetContract.agent.user.name}`,
-        `Tenant: ${targetContract.locataire.user.name}`,
-        `Start: ${formatLongDate(targetContract.date_debut)}`,
-        `End: ${formatLongDate(targetContract.date_fin, "Open")}`,
-        `Amount: ${formatMoney(targetContract.montant)} MAD`,
-        `Signature status: ${targetContract.signature_status}`,
-      ].join("\n"),
-    );
+    downloadContractPdf(targetContract, documentProperty);
   }
 
   return (
-    <div className="min-h-screen bg-white text-[#171411]">
-      <header className="border-b border-black/6">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-5 md:px-8">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <header className="glass sticky top-0 z-40 border-b border-[var(--border)]">
+        <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-6 md:px-8">
           <div className="flex items-center gap-10">
-            <div>
-              <div className="text-[18px] font-bold tracking-tight">ImmoFlow</div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/25">
-                Real Estate SaaS
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
+                <Home className="h-4 w-4 text-white" />
               </div>
+              <div className="text-[19px] font-bold tracking-tight text-[var(--foreground)]">ImmoFlow</div>
             </div>
 
-            <nav className="hidden items-center gap-10 md:flex">
+            <nav className="hidden items-center gap-8 md:flex">
               {[
                 { id: "dashboard", label: "Dashboard" },
                 { id: "documents", label: "Documents" },
                 { id: "payments", label: "Payments" },
-                { id: "notifications", label: "Notifications" },
+                { id: "notifications", label: "Messages" },
                 { id: "profile", label: "Profile" },
               ].map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id as TenantTab)}
-                  className={`text-[15px] ${activeTab === item.id ? "font-semibold text-black" : "text-black/55"}`}
+                  className={`text-[15px] font-medium transition-colors ${activeTab === item.id ? "text-[var(--primary)]" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
                 >
                   {item.label}
                 </button>
@@ -181,18 +309,21 @@ export function LocataireWorkspace({
           </div>
 
           <div className="flex items-center gap-4">
-            <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
-              <Bell className="h-5 w-5" />
+            <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
+              <Bell className="h-4 w-4" />
+              {pendingContract || pendingPayment ? (
+                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--danger)] border-2 border-white" />
+              ) : null}
             </button>
-            <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5">
-              <CircleHelp className="h-5 w-5" />
+            <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
+              <CircleHelp className="h-4 w-4" />
             </button>
             <AvatarMenu user={user} onProfile={() => setActiveTab("profile")} />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1440px] px-6 py-10 md:px-8">
+      <main ref={pageRef} className="mx-auto max-w-[1440px] px-6 py-10 md:px-8">
         {error ? (
           <div className="mb-6 rounded-2xl bg-[rgba(186,74,69,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
@@ -205,7 +336,7 @@ export function LocataireWorkspace({
         ) : null}
 
         {activeTab === "dashboard" ? (
-          <div className="space-y-10">
+          <div className="space-y-10" data-animate="section">
             <div className="flex items-center justify-between rounded-[28px] border border-[#f0e2be] bg-[#fffaf0] px-6 py-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ffefcc] text-[#d28a1e]">
@@ -220,7 +351,7 @@ export function LocataireWorkspace({
                 </div>
               </div>
               {pendingContract ? (
-                <Button className="rounded-2xl" disabled={busy} onClick={() => void handleSignContract()}>
+                <Button className="rounded-2xl" disabled={busy} onClick={() => void beginSignatureFlow()}>
                   <FileSignature className="h-4 w-4" />
                   Sign now
                 </Button>
@@ -228,8 +359,8 @@ export function LocataireWorkspace({
             </div>
 
             <div>
-              <h1 className="text-[62px] font-semibold tracking-tight">Good morning, {user.name.split(" ")[0]}.</h1>
-              <p className="mt-4 max-w-3xl text-[18px] leading-8 text-black/65">
+              <h1 className="text-[48px] md:text-[62px] font-bold tracking-tight text-[var(--foreground)]">Good morning, {user.name.split(" ")[0]}.</h1>
+              <p className="mt-4 max-w-3xl text-[18px] leading-8 text-[var(--muted-foreground)]">
                 {currentResidence
                   ? `Everything looks in order with your residence at ${currentResidence.adresse}.`
                   : "Your tenant portal is connected and ready for contracts, payments, and documents."}
@@ -237,53 +368,56 @@ export function LocataireWorkspace({
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
-              <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">My Contract</div>
+              <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">My Contract</div>
                 <div className="mt-8">
-                  <Badge variant={toneForStatus(activeContract?.statut ?? pendingContract?.signature_status ?? "pending")}>
+                  <Badge variant={toneForStatus(activeContract?.statut ?? pendingContract?.signature_status ?? "pending") as any} className="text-base px-3 py-1">
                     {activeContract ? "Active" : pendingContract ? "Pending signature" : "No contract"}
                   </Badge>
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Last Payment</div>
-                <div className="mt-8 text-[52px] font-semibold tracking-tight">
+              <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Last Payment</div>
+                <div className="mt-8 text-[52px] font-bold tracking-tight text-[var(--foreground)]">
                   {latestPayment ? formatMoney(latestPayment.montant) : "0"}
-                  <span className="ml-2 text-[22px] font-medium">MAD</span>
+                  <span className="ml-2 text-[22px] font-medium text-[var(--muted-foreground)]">MAD</span>
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Next Due</div>
-                <div className="mt-8 text-[52px] font-semibold tracking-tight">
+              <div className="rounded-3xl stat-indigo p-7 text-white shadow-[var(--shadow-primary)] card-lift">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Next Due</div>
+                <div className="mt-8 text-[48px] font-bold tracking-tight">
                   {formatShortDate(pendingPayment?.date_paiement ?? latestPayment?.date_paiement ?? null, "--")}
                 </div>
               </div>
             </div>
 
-            <section>
-              <div className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Current Residence</div>
-              <div className="rounded-[28px] border border-black/6 bg-white p-6">
+            <section data-animate="section">
+              <div className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Current Residence</div>
+              <div className="rounded-3xl border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-sm)]">
                 <div className="grid gap-6 md:grid-cols-[240px_minmax(0,1fr)_80px] md:items-center">
-                  <div className="min-h-[155px] rounded-[20px] bg-[radial-gradient(circle_at_20%_18%,#f0e3c9,transparent_22%),linear-gradient(135deg,#2d78bf,#c3d8ec_65%,#ede4d2)]" />
+                  <div className="min-h-[155px] rounded-2xl bg-[radial-gradient(circle_at_20%_18%,rgba(1,73,124,0.1),transparent_22%),linear-gradient(135deg,rgba(1,73,124,0.05),rgba(44,125,160,0.05)_65%,rgba(1,73,124,0.1))]" />
                   <div>
-                    <div className="text-[19px] font-semibold">
+                    <div className="text-[19px] font-bold text-[var(--foreground)]">
                       {currentResidence?.adresse ?? activeContract?.logement.adresse ?? "No active residence"}
                     </div>
-                    <div className="mt-2 text-[17px] text-black/60">
+                    <div className="mt-2 text-[15px] text-[var(--muted-foreground)]">
                       {currentResidence
                         ? `${currentResidence.commune.nom}, ${currentResidence.type_logement.nom_type}`
                         : "The dashboard will update automatically once a property is attached to your contract."}
                     </div>
-                    <div className="mt-5 flex flex-wrap items-center gap-6 text-[15px]">
-                      <button type="button" className="underline underline-offset-4" onClick={handleDocumentDownload}>
+                    <div className="mt-5 flex flex-wrap items-center gap-6 text-[14px] font-medium">
+                      <button type="button" className="text-[var(--primary)] hover:underline underline-offset-4" onClick={() => setContractDetailsOpen(true)}>
                         View contract
+                      </button>
+                      <button type="button" className="text-[var(--primary)] hover:underline underline-offset-4" onClick={() => setPropertyDetailsOpen(true)}>
+                        View property
                       </button>
                       {activeContract ? (
                         <button
                           type="button"
-                          className="underline underline-offset-4"
+                          className="text-[var(--primary)] hover:underline underline-offset-4"
                           onClick={() => {
                             window.location.href = `mailto:${activeContract.agent.user.email}`;
                           }}
@@ -293,21 +427,21 @@ export function LocataireWorkspace({
                       ) : null}
                     </div>
                   </div>
-                  <div className="text-center text-5xl text-black/8">⌂</div>
+                  <div className="text-center text-5xl text-[var(--muted-foreground)] opacity-20">⌂</div>
                 </div>
               </div>
             </section>
 
             <section>
               <div className="mb-5 flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Payment History</div>
-                <button type="button" className="text-[15px] font-medium" onClick={() => setActiveTab("payments")}>
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Payment History</div>
+                <button type="button" className="text-[14px] font-semibold text-[var(--primary)] hover:underline underline-offset-4" onClick={() => setActiveTab("payments")}>
                   Open all
                 </button>
               </div>
 
-              <div className="overflow-hidden rounded-[28px] border border-black/6 bg-white">
-                <div className="grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 bg-[#fafafa] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+              <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+                <div className="grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 bg-[var(--muted)] px-7 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                   <div>Date</div>
                   <div>Reference</div>
                   <div>Amount</div>
@@ -317,21 +451,21 @@ export function LocataireWorkspace({
                 {sortedPayments.slice(0, 5).map((payment) => (
                   <div
                     key={payment.id}
-                    className="grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 border-t border-black/6 px-7 py-5"
+                    className="table-row-hover grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 border-t border-[var(--border)] px-7 py-4 transition-colors"
                   >
-                    <div className="self-center text-[15px]">{formatShortDate(payment.date_paiement)}</div>
-                    <div className="self-center text-[17px] font-medium">
+                    <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{formatShortDate(payment.date_paiement)}</div>
+                    <div className="self-center text-[15px] font-medium text-[var(--foreground)]">
                       RENT-{new Date(payment.date_paiement).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }).toUpperCase()}
                     </div>
-                    <div className="self-center text-[17px] font-semibold">
+                    <div className="self-center text-[15px] font-bold text-[var(--foreground)]">
                       {formatMoney(payment.montant)} MAD
                     </div>
                     <div className="self-center">
-                      <Badge variant={toneForStatus(payment.statut)}>{payment.statut}</Badge>
+                      <Badge variant={toneForStatus(payment.statut) as any}>{payment.statut}</Badge>
                     </div>
-                    <div className="self-center">
+                    <div className="self-center text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]">
                       <button type="button" onClick={() => handleReceiptDownload(payment)}>
-                        <Download className="h-4 w-4" />
+                        <Download className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
@@ -359,7 +493,7 @@ export function LocataireWorkspace({
         ) : null}
 
         {activeTab === "documents" ? (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" data-animate="section">
             <div className="rounded-[28px] border border-black/6 bg-white p-7">
               <div className="text-[32px] font-semibold tracking-tight">Contract documents</div>
               <div className="mt-6 space-y-5">
@@ -389,7 +523,11 @@ export function LocataireWorkspace({
 
                     <Button className="rounded-2xl" onClick={handleDocumentDownload}>
                       <Download className="h-4 w-4" />
-                      Download contract summary
+                      Download contract PDF
+                    </Button>
+                    <Button variant="outline" className="ml-3 rounded-2xl" onClick={() => setContractDetailsOpen(true)}>
+                      <Eye className="h-4 w-4" />
+                      Details
                     </Button>
                   </>
                 ) : (
@@ -404,7 +542,7 @@ export function LocataireWorkspace({
               <div className="text-[24px] font-semibold">Actions</div>
               <div className="mt-6 space-y-3">
                 {pendingContract ? (
-                  <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void handleSignContract()}>
+                  <Button className="w-full rounded-2xl" disabled={busy} onClick={() => void beginSignatureFlow()}>
                     <FileSignature className="h-4 w-4" />
                     Sign pending contract
                   </Button>
@@ -419,25 +557,25 @@ export function LocataireWorkspace({
         ) : null}
 
         {activeTab === "payments" ? (
-          <div className="space-y-6">
+          <div className="space-y-6" data-animate="section">
             <div>
               <h1 className="text-[36px] font-semibold tracking-tight">Payments</h1>
               <p className="mt-2 text-black/55">All receipts and rent operations tied to your active account.</p>
             </div>
 
             <div className="overflow-hidden rounded-[28px] border border-black/6 bg-white">
-              <div className="grid grid-cols-[160px_1fr_170px_140px_140px_90px] gap-4 bg-[#fafafa] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+              <div className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 bg-[#fafafa] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
                 <div>Date</div>
                 <div>Property</div>
                 <div>Amount</div>
                 <div>Mode</div>
                 <div>Status</div>
-                <div>Receipt</div>
+                <div>Action</div>
               </div>
               {sortedPayments.map((payment) => (
                 <div
                   key={payment.id}
-                  className="grid grid-cols-[160px_1fr_170px_140px_140px_90px] gap-4 border-t border-black/6 px-7 py-5"
+                  className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 border-t border-black/6 px-7 py-5"
                 >
                   <div className="self-center">{formatShortDate(payment.date_paiement)}</div>
                   <div className="self-center">{payment.contrat.logement.adresse}</div>
@@ -446,7 +584,12 @@ export function LocataireWorkspace({
                   <div className="self-center">
                     <Badge variant={toneForStatus(payment.statut)}>{payment.statut}</Badge>
                   </div>
-                  <div className="self-center">
+                  <div className="flex items-center gap-3 self-center">
+                    {payment.statut === "awaiting_tenant_approval" ? (
+                      <Button className="h-9 rounded-xl px-3 text-xs" disabled={busy} onClick={() => void handleApprovePayment(payment)}>
+                        Approve
+                      </Button>
+                    ) : null}
                     <button type="button" onClick={() => handleReceiptDownload(payment)}>
                       <Download className="h-4 w-4" />
                     </button>
@@ -471,6 +614,152 @@ export function LocataireWorkspace({
           <ProfilePanel token={token} user={user} onSaved={reload} />
         ) : null}
       </main>
+      {propertyDetailsOpen ? (
+        <TenantModal title="Property details" onClose={() => setPropertyDetailsOpen(false)}>
+          <div className="space-y-5">
+            <div className="overflow-hidden rounded-[22px] bg-[#f6f6f4]">
+              {documentProperty?.images?.[0] ? (
+                <img src={documentProperty.images[0]} alt={documentProperty.adresse} className="h-56 w-full object-cover" />
+              ) : (
+                <div className="flex h-56 items-center justify-center text-black/35">
+                  <Home className="h-10 w-10" />
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-2xl font-semibold">{documentProperty?.adresse ?? documentContract?.logement.adresse ?? "No property"}</div>
+              <div className="mt-2 text-black/55">
+                {documentProperty ? `${documentProperty.commune.nom} • ${documentProperty.type_logement.nom_type}` : "Property details are limited until the record is loaded."}
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailItem label="Rent" value={`${formatMoney(documentContract?.montant ?? documentProperty?.loyer ?? "0")} MAD`} />
+              <DetailItem label="Area" value={documentProperty ? `${documentProperty.superficie} m²` : "Not set"} />
+              <DetailItem label="Bedrooms" value={String(documentProperty?.chambres ?? "Not set")} />
+              <DetailItem label="Bathrooms" value={String(documentProperty?.salles_bain ?? "Not set")} />
+              <DetailItem label="Floor" value={documentProperty?.etage ?? "Not set"} />
+              <DetailItem label="Parking" value={documentProperty?.parking ? "Included" : "Not included"} />
+            </div>
+            <p className="leading-7 text-black/60">{documentProperty?.description ?? "No description has been added for this property yet."}</p>
+          </div>
+        </TenantModal>
+      ) : null}
+      {contractDetailsOpen ? (
+        <TenantModal title="Contract details" onClose={() => setContractDetailsOpen(false)}>
+          {documentContract ? (
+            <div className="space-y-5">
+              <div className="rounded-[22px] bg-[#faf7f1] p-5">
+                <DetailRow label="Property" value={documentContract.logement.adresse} />
+                <DetailRow label="Tenant" value={documentContract.locataire.user.name} />
+                <DetailRow label="Agent" value={documentContract.agent.user.name} />
+                <DetailRow label="Start" value={formatLongDate(documentContract.date_debut)} />
+                <DetailRow label="End" value={formatLongDate(documentContract.date_fin, "Open")} />
+                <DetailRow label="Rent" value={`${formatMoney(documentContract.montant)} MAD`} />
+                <DetailRow label="Status" value={documentContract.signature_status} />
+              </div>
+              {documentContract.signature_data ? (
+                <div>
+                  <div className="mb-2 text-sm font-semibold text-black/55">Saved signature</div>
+                  <img src={documentContract.signature_data} alt="Tenant signature" className="h-24 rounded-2xl border border-black/10 bg-white object-contain p-3" />
+                </div>
+              ) : null}
+              <Button className="rounded-2xl" onClick={handleDocumentDownload}>
+                <Download className="h-4 w-4" />
+                Download PDF
+              </Button>
+            </div>
+          ) : (
+            <div className="text-black/55">No contract available.</div>
+          )}
+        </TenantModal>
+      ) : null}
+      {signatureOpen ? (
+        <TenantModal title="Draw your signature" onClose={() => setSignatureOpen(false)}>
+          <div className="space-y-4">
+            <p className="text-sm leading-6 text-black/55">
+              Use your mouse, pen, or finger. This signature will be stored on the contract and printed in the PDF.
+            </p>
+            <canvas
+              ref={canvasRef}
+              className="h-52 w-full touch-none rounded-[20px] border border-black/10 bg-[#fbfbfa]"
+              onPointerDown={(event) => {
+                const context = event.currentTarget.getContext("2d");
+                const point = getCanvasPoint(event);
+                drawingRef.current = true;
+                context?.beginPath();
+                context?.moveTo(point.x, point.y);
+              }}
+              onPointerMove={(event) => {
+                if (!drawingRef.current) return;
+                const context = event.currentTarget.getContext("2d");
+                const point = getCanvasPoint(event);
+                context?.lineTo(point.x, point.y);
+                context?.stroke();
+                setSignatureEmpty(false);
+              }}
+              onPointerUp={() => {
+                drawingRef.current = false;
+              }}
+              onPointerLeave={() => {
+                drawingRef.current = false;
+              }}
+            />
+            <div className="flex justify-between gap-3">
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                onClick={() => {
+                  const canvas = canvasRef.current;
+                  const context = canvas?.getContext("2d");
+                  if (canvas && context) {
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    setSignatureEmpty(true);
+                  }
+                }}
+              >
+                Clear
+              </Button>
+              <Button className="rounded-2xl" disabled={busy} onClick={() => void handleSignContract()}>
+                Confirm signature
+              </Button>
+            </div>
+          </div>
+        </TenantModal>
+      ) : null}
+    </div>
+  );
+}
+
+function TenantModal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-[28px] bg-white shadow-[0_30px_90px_rgba(0,0,0,0.28)]">
+        <div className="flex items-center justify-between border-b border-black/8 px-6 py-4">
+          <h2 className="text-2xl font-semibold">{title}</h2>
+          <button type="button" className="rounded-full p-2 text-black/55 transition hover:bg-black/5" onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[calc(90vh-76px)] overflow-y-auto p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[#f6f6f4] p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">{label}</div>
+      <div className="mt-2 font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-black/8 py-3 last:border-b-0">
+      <span className="text-black/55">{label}</span>
+      <span className="text-right font-semibold">{value}</span>
     </div>
   );
 }

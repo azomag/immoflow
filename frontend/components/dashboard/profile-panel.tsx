@@ -1,13 +1,39 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import type { AuthenticatedUser } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { formatLongDate, initials } from "@/components/dashboard/workspace-utils";
+import {
+  User,
+  Mail,
+  Phone,
+  AtSign,
+  Camera,
+  Lock,
+  ShieldCheck,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
+
+const roleLabel: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  agent: "Agent",
+  locataire: "Locataire",
+};
+
+type UpdateProfileResponse = {
+  message: string;
+  user: AuthenticatedUser;
+};
 
 export function ProfilePanel({
   token,
@@ -32,7 +58,11 @@ export function ProfilePanel({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const avatarPreview = useMemo(() => (avatarFile ? URL.createObjectURL(avatarFile) : form.avatar_url), [avatarFile, form.avatar_url]);
+  const { update } = useSession();
+  const avatarPreview = useMemo(
+    () => (avatarFile ? URL.createObjectURL(avatarFile) : form.avatar_url),
+    [avatarFile, form.avatar_url]
+  );
 
   async function saveProfile() {
     setBusy(true);
@@ -44,190 +74,315 @@ export function ProfilePanel({
       payload.set("name", form.name);
       payload.set("email", form.email);
       payload.set("phone", form.phone || "");
-      if (form.login) {
-        payload.set("login", form.login);
-      }
-      if (form.avatar_url && !avatarFile) {
-        payload.set("avatar_url", form.avatar_url);
-      }
-      if (avatarFile) {
-        payload.set("avatar_image", avatarFile);
-      }
-      if (form.current_password) {
-        payload.set("current_password", form.current_password);
-      }
+      if (form.login) payload.set("login", form.login);
+      if (form.avatar_url && !avatarFile) payload.set("avatar_url", form.avatar_url);
+      if (avatarFile) payload.set("avatar_image", avatarFile);
+      if (form.current_password) payload.set("current_password", form.current_password);
       if (form.password) {
         payload.set("password", form.password);
         payload.set("password_confirmation", form.password_confirmation);
       }
       payload.set("_method", "PATCH");
 
-      await backendRequest("/api/auth/me", {
-        method: "POST",
-        body: payload,
-      }, token);
-      setNotice("Profile saved. Sign out and in again to refresh session labels.");
+      const response = await backendRequest<UpdateProfileResponse>(
+        "/api/auth/me",
+        { method: "POST", body: payload },
+        token
+      );
+
+      await update({
+        backendSync: {
+          token,
+          user: response.user,
+        },
+      });
+
       setForm((current) => ({
         ...current,
-        current_password: "",
-        password: "",
-        password_confirmation: "",
+        name: response.user.name,
+        email: response.user.email,
+        phone: response.user.phone ?? "",
+        login: response.user.login ?? "",
+        avatar_url: response.user.avatar_url ?? "",
       }));
+      setNotice("Profile saved successfully.");
+      setForm((c) => ({ ...c, current_password: "", password: "", password_confirmation: "" }));
       setAvatarFile(null);
       await onSaved();
-    } catch (profileError) {
-      setError(profileError instanceof Error ? profileError.message : "Profile update failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Profile update failed.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="space-y-7">
-      <div className="flex flex-wrap items-center gap-8 border-b border-black/8 pb-5">
-        <h1 className="text-[28px] font-semibold tracking-tight">Profile</h1>
-        {["Profile", "Security", "Notifications", "Appearance"].map((entry, index) => (
-          <span
-            key={entry}
-            className={`pb-4 text-[15px] ${index === 0 ? "border-b-2 border-black font-semibold text-black" : "text-black/55"}`}
-          >
-            {entry}
-          </span>
-        ))}
+    <section className="max-w-5xl space-y-8">
+      {/* Page title */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Profile Settings</h1>
+        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          Manage your personal information and account security.
+        </p>
       </div>
 
+      {/* Feedback banners */}
       {notice ? (
-        <div className="rounded-2xl bg-[rgba(47,143,98,0.12)] px-4 py-3 text-sm text-[var(--success)]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[rgba(44,125,160,0.2)] bg-[var(--success-bg)] px-5 py-4 text-sm font-medium text-[var(--success)]">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
           {notice}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl bg-[rgba(186,74,69,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[rgba(1,42,74,0.2)] bg-[var(--danger-bg)] px-5 py-4 text-sm font-medium text-[var(--danger)]">
+          <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>
       ) : null}
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
+        {/* ── Left column ── */}
         <div className="space-y-6">
-          <div className="rounded-[24px] border border-black/10 bg-white p-8">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-5">
-                <Avatar className="h-20 w-20 border border-black/10">
+          {/* Avatar + identity card */}
+          <div className="rounded-3xl border border-[var(--border)] bg-white p-8 shadow-[var(--shadow-sm)]">
+            <h2 className="mb-6 text-base font-semibold text-[var(--foreground)]">Personal Information</h2>
+
+            {/* Avatar row */}
+            <div className="mb-8 flex items-center gap-6">
+              <div className="relative">
+                <Avatar className="h-20 w-20 border-2 border-[var(--border)] shadow-[var(--shadow-sm)]">
                   <AvatarImage src={avatarPreview || undefined} alt={form.name} />
-                  <AvatarFallback>{initials(form.name)}</AvatarFallback>
+                  <AvatarFallback className="bg-[var(--primary)] text-white text-xl font-bold">
+                    {initials(form.name)}
+                  </AvatarFallback>
                 </Avatar>
-                <div>
-                  <div className="text-[28px] font-semibold">{form.name}</div>
-                  <div className="text-black/55">{user.role.replace("_", " ")}</div>
-                </div>
-              </div>
-              <Button className="rounded-2xl" disabled={busy} onClick={() => void saveProfile()}>
-                Save Changes
-              </Button>
-            </div>
-
-            <div className="mt-10 grid gap-5 md:grid-cols-2">
-              <FieldLabel label="Full name" value={user.name} />
-              <FieldLabel label="Email address" value={user.email} />
-              <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-              <Input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
-
-              <FieldLabel label="Phone number" value={user.phone ?? "Empty"} />
-              <FieldLabel label="Username" value={user.login ?? "Empty"} />
-              <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-              <Input value={form.login} onChange={(event) => setForm((current) => ({ ...current, login: event.target.value }))} />
-
-              <div className="space-y-2 md:col-span-2">
-                <FieldLabel label="Profile image" value={avatarFile?.name ?? user.avatar_url ?? "Empty"} />
-                <label className="flex h-12 cursor-pointer items-center rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm text-black/60">
-                  {avatarFile?.name ?? "Upload new image"}
+                <label
+                  className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[var(--shadow-primary)] transition hover:bg-[var(--primary-hover)]"
+                  title="Upload photo"
+                >
+                  <Camera className="h-3.5 w-3.5" />
                   <input
                     type="file"
                     accept="image/*"
                     className="sr-only"
-                    onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
                   />
                 </label>
               </div>
+              <div>
+                <div className="text-lg font-bold text-[var(--foreground)]">{form.name}</div>
+                <div className="mt-0.5 text-sm text-[var(--muted-foreground)]">{user.email}</div>
+                <div className="mt-2 inline-flex items-center rounded-full bg-[rgba(1,73,124,0.1)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--primary)]">
+                  {roleLabel[user.role] ?? user.role}
+                </div>
+              </div>
+            </div>
+
+            <Separator className="mb-7" />
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="prof-name" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  <User className="h-3.5 w-3.5" /> Full Name
+                </Label>
+                <Input
+                  id="prof-name"
+                  value={form.name}
+                  onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))}
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prof-email" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  <Mail className="h-3.5 w-3.5" /> Email Address
+                </Label>
+                <Input
+                  id="prof-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prof-phone" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  <Phone className="h-3.5 w-3.5" /> Phone Number
+                </Label>
+                <Input
+                  id="prof-phone"
+                  value={form.phone}
+                  onChange={(e) => setForm((c) => ({ ...c, phone: e.target.value }))}
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prof-login" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  <AtSign className="h-3.5 w-3.5" /> Username
+                </Label>
+                <Input
+                  id="prof-login"
+                  value={form.login}
+                  onChange={(e) => setForm((c) => ({ ...c, login: e.target.value }))}
+                  className="h-11 rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                className="h-11 rounded-xl bg-[var(--primary)] px-6 font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)]"
+                disabled={busy}
+                onClick={() => void saveProfile()}
+              >
+                {busy ? "Saving…" : "Save Changes"}
+              </Button>
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-[24px] border border-black/10 bg-white p-7">
-              <div className="text-[20px] font-semibold">Security Password</div>
-              <p className="mt-3 text-sm leading-6 text-black/55">
-                Keep these empty when you only want profile data changes.
-              </p>
-              <div className="mt-6 space-y-4">
+          {/* Security card */}
+          <div className="rounded-3xl border border-[var(--border)] bg-white p-8 shadow-[var(--shadow-sm)]">
+            <div className="mb-1 flex items-center gap-2">
+              <Lock className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <h2 className="text-base font-semibold text-[var(--foreground)]">Change Password</h2>
+            </div>
+            <p className="mb-6 text-sm text-[var(--muted-foreground)]">
+              Leave these blank if you only want to update profile information.
+            </p>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cur-pw" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  Current Password
+                </Label>
+                <Input
+                  id="cur-pw"
+                  type="password"
+                  value={form.current_password}
+                  onChange={(e) => setForm((c) => ({ ...c, current_password: e.target.value }))}
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Current password</Label>
-                  <Input type="password" value={form.current_password} onChange={(event) => setForm((current) => ({ ...current, current_password: event.target.value }))} />
+                  <Label htmlFor="new-pw" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                    New Password
+                  </Label>
+                  <Input
+                    id="new-pw"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
+                    className="h-11 rounded-xl"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>New password</Label>
-                  <Input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Confirm new password</Label>
-                  <Input type="password" value={form.password_confirmation} onChange={(event) => setForm((current) => ({ ...current, password_confirmation: event.target.value }))} />
+                  <Label htmlFor="conf-pw" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                    Confirm New Password
+                  </Label>
+                  <Input
+                    id="conf-pw"
+                    type="password"
+                    value={form.password_confirmation}
+                    onChange={(e) =>
+                      setForm((c) => ({ ...c, password_confirmation: e.target.value }))
+                    }
+                    className="h-11 rounded-xl"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-black/10 bg-white p-7">
-              <div className="text-[20px] font-semibold">Account Details</div>
-              <div className="mt-6 space-y-4 text-sm">
-                <ProfileRow label="Role" value={user.role.replace("_", " ")} />
-                <ProfileRow label="Status" value={user.status} />
-                <ProfileRow label="Last login" value={user.last_login_at ? formatLongDate(user.last_login_at) : "Not recorded"} />
-              </div>
+            <div className="mt-6 flex justify-end">
+              <Button
+                className="h-11 rounded-xl bg-[var(--primary)] px-6 font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)]"
+                disabled={busy}
+                onClick={() => void saveProfile()}
+              >
+                Update Password
+              </Button>
             </div>
           </div>
         </div>
 
+        {/* ── Right column ── */}
         <div className="space-y-6">
-          <div className="rounded-[24px] bg-black p-7 text-white">
-            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-white/55">Plan Status</div>
-            <div className="mt-5 text-[38px] font-semibold">Enterprise</div>
-            <div className="mt-2 text-white/60">ImmoFlow workspace</div>
-            <div className="mt-6 h-2 rounded-full bg-white/20">
-              <div className="h-full w-[84%] rounded-full bg-white" />
+          {/* Account status */}
+          <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)]">
+            <div className="mb-5 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <h2 className="text-base font-semibold text-[var(--foreground)]">Account Details</h2>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: "Role", value: roleLabel[user.role] ?? user.role },
+                { label: "Status", value: user.status },
+                {
+                  label: "Last login",
+                  value: user.last_login_at
+                    ? formatLongDate(user.last_login_at)
+                    : "Not recorded",
+                },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-4 rounded-xl bg-[var(--muted)] px-4 py-3"
+                >
+                  <span className="text-sm text-[var(--muted-foreground)]">{label}</span>
+                  <span className="text-sm font-semibold capitalize text-[var(--foreground)]">
+                    {value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-black/10 bg-white p-7">
-            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-black/45">Appearance</div>
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              <div className="rounded-2xl border-2 border-black bg-white p-4">
-                <div className="h-2 w-full rounded bg-black/10" />
-                <div className="mt-3 h-2 w-2/3 rounded bg-black/10" />
+          {/* Plan card */}
+          <div className="overflow-hidden rounded-3xl shadow-[var(--shadow-lg)]">
+            <div className="stat-indigo p-7 text-white">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/60">
+                Plan Status
               </div>
-              <div className="rounded-2xl bg-[#888888] p-4">
-                <div className="h-2 w-full rounded bg-white/20" />
-                <div className="mt-3 h-2 w-2/3 rounded bg-white/20" />
+              <div className="mt-3 text-4xl font-bold">Enterprise</div>
+              <div className="mt-1 text-sm text-white/60">ImmoFlow workspace</div>
+              <div className="mt-5 h-2 rounded-full bg-white/20">
+                <div className="h-full w-[84%] rounded-full bg-white/90" />
               </div>
+              <div className="mt-2 text-xs text-white/50">84% of resources used</div>
+            </div>
+          </div>
+
+          {/* Invoice template info */}
+          <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+            <div className="bg-[var(--sidebar-bg)] px-7 py-5">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-white/60" />
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+                  Invoice Template
+                </span>
+              </div>
+              <div className="mt-2 text-lg font-bold text-white">Premium rental invoice</div>
+              <div className="mt-1 text-xs text-white/50">
+                Used when generating PDF invoices from property details.
+              </div>
+            </div>
+            <div className="space-y-0 p-2">
+              {[
+                ["Brand", "ImmoFlow"],
+                ["Sections", "Tenant, property, rent, balance"],
+                ["Output", "PDF"],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-4 rounded-xl px-4 py-3 text-sm"
+                >
+                  <span className="text-[var(--muted-foreground)]">{label}</span>
+                  <span className="font-semibold text-[var(--foreground)]">{value}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function FieldLabel({ label, value }: { label: string; value: string }) {
-  return (
-    <Label>
-      {label}
-      <span className="ml-2 font-normal normal-case tracking-normal text-black/40">{value}</span>
-    </Label>
-  );
-}
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-black/55">{label}</span>
-      <span className="font-semibold capitalize">{value}</span>
-    </div>
   );
 }

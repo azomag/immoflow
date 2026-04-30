@@ -1,27 +1,76 @@
 @import "tailwindcss";
 
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
 :root {
+  /* Base */
   --background: #ffffff;
-  --foreground: #171411;
+  --foreground: #000000;
+
+  /* Card / surface */
   --card: rgba(255, 255, 255, 0.96);
-  --card-foreground: #171411;
-  --muted: #f6f6f4;
-  --muted-foreground: #6b6258;
-  --primary: #1f1d1a;
-  --primary-foreground: #f8f4ee;
-  --secondary: #d7a25b;
-  --secondary-foreground: #201a14;
-  --accent: #eef3ee;
-  --accent-foreground: #1f2b22;
-  --border: rgba(43, 35, 27, 0.08);
-  --ring: rgba(31, 29, 26, 0.32);
-  --success: #2f8f62;
-  --danger: #ba4a45;
-  --warning: #d28a1e;
-  --shadow: 0 20px 48px rgba(36, 28, 18, 0.06);
-  --radius: 1.25rem;
+  --card-foreground: #000000;
+
+  /* Muted */
+  --muted: #f1f8fc;
+  --muted-foreground: #2a6f97;
+
+  /* Primary */
+  --primary: #01497c;
+  --primary-foreground: #ffffff;
+  --primary-hover: #013a63;
+  --primary-glow: rgba(1, 73, 124, 0.2);
+
+  /* Secondary */
+  --secondary: #2c7da0;
+  --secondary-hover: #2a6f97;
+  --secondary-foreground: #ffffff;
+  --secondary-glow: rgba(44, 125, 160, 0.22);
+
+  /* Accent */
+  --accent: #e6f2f7;
+  --accent-foreground: #012a4a;
+
+  /* Status */
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.12);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.12);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.12);
+
+  /* Borders & rings */
+  --border: rgba(1, 42, 74, 0.12);
+  --border-strong: rgba(1, 42, 74, 0.24);
+  --ring: rgba(1, 79, 134, 0.35);
+
+  /* Sidebar (dark panel) */
+  --sidebar-bg: #a9d6e5;
+  --sidebar-text: #000000;
+  --sidebar-text-active: #000000;
+  --sidebar-active-bg: rgba(255, 255, 255, 0.8);
+  --sidebar-active-border: #2c7da0;
+  --sidebar-border: rgba(1, 42, 74, 0.12);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.48);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(1, 42, 74, 0.08), 0 1px 2px rgba(1, 42, 74, 0.06);
+  --shadow: 0 4px 16px rgba(1, 42, 74, 0.1), 0 2px 6px rgba(1, 42, 74, 0.06);
+  --shadow-lg: 0 20px 48px rgba(1, 42, 74, 0.14), 0 8px 20px rgba(1, 42, 74, 0.08);
+  --shadow-xl: 0 40px 80px rgba(1, 42, 74, 0.18);
+  --shadow-primary: 0 8px 24px rgba(1, 79, 134, 0.28);
+
+  /* Radius */
+  --radius: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
 }
 
+/* Tailwind theme bridge */
 @theme inline {
   --font-sans: var(--font-manrope);
   --font-mono: var(--font-plex-mono);
@@ -39,11 +88,14 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 10px);
-  --radius-md: calc(var(--radius) - 6px);
-  --radius-lg: var(--radius);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
 }
 
+/* ============================================================
+   BASE RESETS
+   ============================================================ */
 * {
   border-color: var(--border);
 }
@@ -54,9 +106,10 @@ html {
 
 body {
   min-height: 100%;
-  background: #ffffff;
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-manrope), sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -71,14 +124,72 @@ textarea {
   font: inherit;
 }
 
-.glass-panel {
-  background: var(--card);
-  backdrop-filter: blur(18px);
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+
+/* Glass card */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow: var(--shadow);
 }
 
+/* Glass panel (darker tint) */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #012a4a 0%, #014f86 50%, #2c7da0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-amber {
+  background: linear-gradient(135deg, #013a63 0%, #2a6f97 60%, #61a5c2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+  background: linear-gradient(135deg, #013a63 0%, #014f86 50%, #2c7da0 100%);
+}
+
+.gradient-hero {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(1, 79, 134, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 50%, rgba(44, 125, 160, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 10% 80%, rgba(137, 194, 217, 0.12) 0%, transparent 50%),
+    linear-gradient(180deg, #ffffff 0%, #f2f9fc 100%);
+}
+
+/* Stat card gradient backgrounds */
+.stat-indigo {
+  background: linear-gradient(135deg, #013a63 0%, #014f86 100%);
+}
+
+.stat-amber {
+  background: linear-gradient(135deg, #2a6f97 0%, #2c7da0 100%);
+}
+
+.stat-emerald {
+  background: linear-gradient(135deg, #468faf 0%, #61a5c2 100%);
+}
+
+/* Subtle dot grid page background */
 .page-grid {
   position: relative;
+  min-height: 100vh;
 }
 
 .page-grid::before {
@@ -86,9 +197,206 @@ textarea {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(31, 29, 26, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 29, 26, 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 75%);
+    radial-gradient(circle, rgba(1, 73, 124, 0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 80%);
   pointer-events: none;
+  z-index: 0;
+}
+
+/* Sidebar dark panel */
+.sidebar-dark {
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+}
+
+.sidebar-dark .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--sidebar-text);
+  transition: background 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  text-align: left;
+  border: none;
+  background: transparent;
+}
+
+.sidebar-dark .nav-item:hover {
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-text-active);
+}
+
+.sidebar-dark .nav-item.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-text-active);
+  box-shadow: inset 3px 0 0 var(--sidebar-active-border);
+}
+
+/* ============================================================
+   SHIMMER SKELETON ANIMATION
+   ============================================================ */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.05) 25%,
+    rgba(15, 23, 42, 0.10) 50%,
+    rgba(15, 23, 42, 0.05) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 0.5rem;
+}
+
+/* ============================================================
+   FADE-IN ANIMATIONS
+   ============================================================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.25s ease both;
+}
+
+/* Staggered children */
+.stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger > *:nth-child(4) { animation-delay: 0.20s; }
+.stagger > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger > *:nth-child(6) { animation-delay: 0.30s; }
+
+/* ============================================================
+   CARD HOVER LIFT
+   ============================================================ */
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============================================================
+   BADGE GLOW VARIANTS
+   ============================================================ */
+.badge-indigo {
+  background: rgba(1, 73, 124, 0.12);
+  color: #01497c;
+  border: 1px solid rgba(1, 73, 124, 0.24);
+}
+
+.badge-amber {
+  background: rgba(44, 125, 160, 0.12);
+  color: #2c7da0;
+  border: 1px solid rgba(44, 125, 160, 0.24);
+}
+
+.badge-emerald {
+  background: rgba(70, 143, 175, 0.12);
+  color: #468faf;
+  border: 1px solid rgba(70, 143, 175, 0.24);
+}
+
+.badge-rose {
+  background: rgba(1, 42, 74, 0.12);
+  color: #012a4a;
+  border: 1px solid rgba(1, 42, 74, 0.24);
+}
+
+.badge-slate {
+  background: rgba(1, 58, 99, 0.06);
+  color: #013a63;
+  border: 1px solid rgba(1, 58, 99, 0.12);
+}
+
+/* ============================================================
+   TABLE ROWS
+   ============================================================ */
+.table-row-hover {
+  transition: background 0.12s ease;
+}
+
+.table-row-hover:hover {
+  background: rgba(1, 73, 124, 0.03);
+}
+
+/* ============================================================
+   GRADIENT ICON CONTAINER
+   ============================================================ */
+.icon-indigo {
+  background: linear-gradient(135deg, #013a63 0%, #014f86 100%);
+  color: #ffffff;
+}
+
+.icon-amber {
+  background: linear-gradient(135deg, #2a6f97 0%, #2c7da0 100%);
+  color: #ffffff;
+}
+
+.icon-emerald {
+  background: linear-gradient(135deg, #468faf 0%, #61a5c2 100%);
+  color: #ffffff;
+}
+
+.icon-rose {
+  background: linear-gradient(135deg, #012a4a 0%, #013a63 100%);
+  color: #ffffff;
+}
+
+.icon-slate {
+  background: linear-gradient(135deg, #01497c 0%, #468faf 100%);
+  color: #ffffff;
+}
+
+/* ============================================================
+   SCROLLBAR STYLING
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(1, 42, 74, 0.2);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(1, 42, 74, 0.34);
 }

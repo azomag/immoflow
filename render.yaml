@@ -1,11 +1,10 @@
 services:
   - type: web
     name: immoflow-backend
-    runtime: php
-    rootDir: backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     plan: starter
-    buildCommand: composer install --no-dev --optimize-autoloader
-    startCommand: bash scripts/render-start.sh
     healthCheckPath: /api/ping
     envVars:
       - key: APP_ENV

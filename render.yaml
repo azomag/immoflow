@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: immoflow-backend
+    runtime: php
+    rootDir: backend
+    plan: starter
+    buildCommand: composer install --no-dev --optimize-autoloader
+    startCommand: bash scripts/render-start.sh
+    healthCheckPath: /api/ping
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        sync: false
+      - key: APP_KEY
+        sync: false
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_URL
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL_CA_CONTENT
+        sync: false
+      - key: DB_SSL_CA_BASE64
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: SESSION_DRIVER
+        value: file
+      - key: CACHE_STORE
+        value: file
+      - key: QUEUE_CONNECTION
+        value: database

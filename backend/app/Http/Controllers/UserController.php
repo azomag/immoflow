@@ -59,7 +59,7 @@ class UserController extends Controller
             'niveau_acces' => ['nullable', 'string', 'max:255'],
             'date_naissance' => ['nullable', 'date'],
             'adresse' => ['nullable', 'string', 'max:255'],
-            'avatar_url' => ['nullable', 'url', 'max:2048'],
+            'avatar_url' => ['nullable', 'string', 'max:2048'],
             'avatar_image' => ['nullable', 'image', 'max:2048'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
@@ -77,7 +77,7 @@ class UserController extends Controller
             'status' => $validated['status'] ?? 'active',
             'avatar_url' => $request->hasFile('avatar_image')
                 ? url(Storage::url($request->file('avatar_image')->store('avatars', 'public')))
-                : ($validated['avatar_url'] ?? null),
+                : ($validated['avatar_url'] ?? User::defaultAvatarForRole($validated['role'])),
             'managed_by_id' => $actor->id,
             'password' => $validated['password'],
         ]);
@@ -100,7 +100,7 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'phone' => ['nullable', 'string', 'max:30'],
             'login' => ['nullable', 'string', 'max:255', 'unique:users,login,'.$user->id],
-            'avatar_url' => ['nullable', 'url', 'max:2048'],
+            'avatar_url' => ['nullable', 'string', 'max:2048'],
             'avatar_image' => ['nullable', 'image', 'max:2048'],
             'current_password' => ['nullable', 'required_with:password', 'current_password'],
             'password' => ['nullable', 'confirmed', Password::min(8)],

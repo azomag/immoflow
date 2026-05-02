@@ -26,7 +26,7 @@ class AuthController extends Controller
             'niveau_acces' => ['nullable', 'string', 'max:255'],
             'date_naissance' => ['nullable', 'date'],
             'adresse' => ['nullable', 'string', 'max:255'],
-            'avatar_url' => ['nullable', 'url', 'max:2048'],
+            'avatar_url' => ['nullable', 'string', 'max:2048'],
             'avatar_image' => ['nullable', 'image', 'max:2048'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
@@ -44,7 +44,7 @@ class AuthController extends Controller
             'status' => $this->defaultStatusFor($validated['role']),
             'avatar_url' => $request->hasFile('avatar_image')
                 ? url(Storage::url($request->file('avatar_image')->store('avatars', 'public')))
-                : ($validated['avatar_url'] ?? null),
+                : ($validated['avatar_url'] ?? User::defaultAvatarForRole($validated['role'])),
             'password' => $validated['password'],
         ]);
 
@@ -83,7 +83,7 @@ class AuthController extends Controller
             'google_id' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
-            'avatar_url' => ['nullable', 'url', 'max:2048'],
+            'avatar_url' => ['nullable', 'string', 'max:2048'],
             'phone' => ['nullable', 'string', 'max:30'],
             'login' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'in:admin,agent,locataire'],
@@ -113,7 +113,7 @@ class AuthController extends Controller
                 'role' => $validated['role'],
                 'status' => $this->defaultStatusFor($validated['role']),
                 'google_id' => $validated['google_id'],
-                'avatar_url' => $validated['avatar_url'] ?? null,
+                'avatar_url' => $validated['avatar_url'] ?? User::defaultAvatarForRole($validated['role']),
                 'email_verified_at' => now(),
             ]);
         } else {

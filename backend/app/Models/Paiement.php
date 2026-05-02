@@ -17,7 +17,11 @@ class Paiement extends Model
         'montant',
         'date_paiement',
         'mode',
+        'rib',
+        'reference',
+        'cash_note',
         'statut',
+        'approved_by_tenant_at',
     ];
 
     /**
@@ -27,6 +31,7 @@ class Paiement extends Model
     {
         return [
             'date_paiement' => 'date',
+            'approved_by_tenant_at' => 'datetime',
         ];
     }
 

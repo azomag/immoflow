@@ -106,11 +106,11 @@ export type Contrat = {
   logement: Pick<Logement, "id" | "adresse" | "loyer">;
   agent: {
     id: number;
-    user: Pick<AuthenticatedUser, "id" | "name" | "email">;
+    user: Pick<AuthenticatedUser, "id" | "name" | "email" | "avatar_url">;
   };
   locataire: {
     id: number;
-    user: Pick<AuthenticatedUser, "id" | "name" | "email">;
+    user: Pick<AuthenticatedUser, "id" | "name" | "email" | "avatar_url">;
   };
   paiements?: Paiement[];
 };

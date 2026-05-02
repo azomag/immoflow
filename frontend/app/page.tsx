@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Building2,
@@ -63,16 +64,8 @@ export default function Home() {
       <header className="sticky top-0 z-40 glass border-b border-white/40">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-[17px] font-bold tracking-tight text-[var(--foreground)]">
-                ImmoFlow
-              </div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                Real Estate SaaS
-              </div>
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
+              <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={40} height={40} className="h-full w-full object-cover" priority />
             </div>
           </div>
           <nav className="flex items-center gap-3">

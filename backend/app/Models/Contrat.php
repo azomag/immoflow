@@ -23,6 +23,7 @@ class Contrat extends Model
         'statut',
         'signature_status',
         'signed_at',
+        'signature_data',
     ];
 
     /**

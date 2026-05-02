@@ -1,21 +1,28 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import {
+  Bath,
   Bell,
   Building2,
+  CarFront,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Eye,
   FileDown,
+  Flame,
   CircleHelp,
   CreditCard,
   Ellipsis,
   FileText,
+  Layers3,
   LayoutGrid,
   PencilLine,
+  Ruler,
   Mail,
   Menu,
   Plus,
@@ -29,6 +36,7 @@ import {
   Users,
   Trash2,
   X,
+  BedDouble,
 } from "lucide-react";
 import { gsap } from "gsap";
 import type {
@@ -43,9 +51,11 @@ import type {
   UserRecord,
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { downloadContractPdf } from "@/lib/document-pdf";
 import { formatFileSize, prepareImagesForUpload } from "@/lib/image-upload";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
+import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -105,7 +115,6 @@ function emptyPropertyForm() {
     parking: false,
     chauffage: "",
     statut_publication: "listed",
-    images_text: "",
     locataire_id: "",
     contrat_date_debut: new Date().toISOString().slice(0, 10),
     contrat_date_fin: "",
@@ -145,11 +154,16 @@ export function AdminWorkspace({
   const [userView, setUserView] = useState<UserView>(role === "super_admin" ? "admins" : "agents");
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<number | null>(null);
+  const [propertyImageViewer, setPropertyImageViewer] = useState<{ images: string[]; index: number } | null>(null);
+  const [editingContractId, setEditingContractId] = useState<number | null>(null);
+  const [contractDetails, setContractDetails] = useState<Contrat | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [propertyForm, setPropertyForm] = useState(emptyPropertyForm);
+  const [propertyExistingImages, setPropertyExistingImages] = useState<string[]>([]);
   const [propertyImageFiles, setPropertyImageFiles] = useState<File[]>([]);
+  const [propertyImagePreviewUrls, setPropertyImagePreviewUrls] = useState<string[]>([]);
   const [preparingImages, setPreparingImages] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     contrat_id: "",
@@ -384,6 +398,7 @@ export function AdminWorkspace({
     () => contrats.find((entry) => String(entry.id) === paymentForm.contrat_id) ?? null,
     [contrats, paymentForm.contrat_id],
   );
+  const totalPropertyImageCount = propertyExistingImages.length + propertyImageFiles.length;
 
   useEffect(() => {
     if (!notice && !error) {
@@ -431,6 +446,12 @@ export function AdminWorkspace({
     );
   }, [activeTab, selectedPropertyId, userView]);
 
+  useEffect(() => {
+    return () => {
+      propertyImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [propertyImagePreviewUrls]);
+
   async function runMutation(action: () => Promise<void>) {
     setBusy(true);
     setError(null);
@@ -447,17 +468,25 @@ export function AdminWorkspace({
   }
 
   function resetPropertyEditor() {
+    propertyImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
     setEditingPropertyId(null);
     setPropertyForm(emptyPropertyForm());
+    setPropertyExistingImages([]);
     setPropertyImageFiles([]);
+    setPropertyImagePreviewUrls([]);
     setPropertyWizardStep(0);
   }
 
   function openTab(tab: AdminTab) {
     setActiveTab(tab);
     setSelectedPropertyId(null);
+    setContractDetails(null);
+    setPropertyImageViewer(null);
     setSidebarOpen(false);
     resetPropertyEditor();
+    if (tab !== "contracts") {
+      resetContractEditor();
+    }
   }
 
   function openCreateProperty() {
@@ -468,9 +497,23 @@ export function AdminWorkspace({
 
   function openContractWizard() {
     setActiveTab("contracts");
+    resetContractEditor();
     setContractWizardStep(0);
     setContractWizardOpen(true);
     setSidebarOpen(false);
+  }
+
+  function resetContractEditor() {
+    setEditingContractId(null);
+    setContractForm({
+      agent_id: "",
+      locataire_id: "",
+      logement_id: "",
+      date_debut: "",
+      date_fin: "",
+      montant: "",
+      statut: "active",
+    });
   }
 
   function openPaymentWizard() {
@@ -496,9 +539,15 @@ export function AdminWorkspace({
       return;
     }
 
-    if (files.length > 10) {
-      setError("You can upload a maximum of 10 images for one property.");
-      files = files.slice(0, 10);
+    const remainingSlots = Math.max(0, 10 - (propertyExistingImages.length + propertyImageFiles.length));
+    if (remainingSlots <= 0) {
+      setError("You already have 10 images. Remove one to upload another.");
+      return;
+    }
+
+    if (files.length > remainingSlots) {
+      setError(`You can add ${remainingSlots} more image${remainingSlots > 1 ? "s" : ""} (max 10).`);
+      files = files.slice(0, remainingSlots);
     }
 
     setPreparingImages(true);
@@ -507,7 +556,11 @@ export function AdminWorkspace({
     try {
       const preparedFiles = await prepareImagesForUpload(files);
       const optimizedCount = preparedFiles.filter((file, index) => file.size < files[index].size).length;
-      setPropertyImageFiles(preparedFiles);
+      setPropertyImageFiles((current) => [...current, ...preparedFiles]);
+      setPropertyImagePreviewUrls((current) => [
+        ...current,
+        ...preparedFiles.map((file) => URL.createObjectURL(file)),
+      ]);
       setNotice(
         optimizedCount > 0
           ? `${optimizedCount} image${optimizedCount > 1 ? "s" : ""} optimized for upload.`
@@ -544,16 +597,36 @@ export function AdminWorkspace({
       parking: snapshot.logement.parking ?? false,
       chauffage: snapshot.logement.chauffage ?? "",
       statut_publication: snapshot.logement.statut_publication ?? "listed",
-      images_text: (snapshot.logement.images ?? []).join("\n"),
       locataire_id: String((snapshot.activeContract ?? snapshot.latestContract)?.locataire.id ?? ""),
       contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? new Date().toISOString().slice(0, 10),
       contrat_date_fin: (snapshot.activeContract ?? snapshot.latestContract)?.date_fin ?? "",
       contrat_statut: (snapshot.activeContract ?? snapshot.latestContract)?.statut ?? "active",
     });
+    setPropertyExistingImages(snapshot.logement.images ?? []);
     setPropertyImageFiles([]);
+    setPropertyImagePreviewUrls([]);
+  }
+
+  function removeExistingPropertyImage(index: number) {
+    setPropertyExistingImages((current) => current.filter((_, i) => i !== index));
+  }
+
+  function removeUploadedPropertyImage(index: number) {
+    const previewToRevoke = propertyImagePreviewUrls[index];
+    if (previewToRevoke) {
+      URL.revokeObjectURL(previewToRevoke);
+    }
+
+    setPropertyImageFiles((current) => current.filter((_, i) => i !== index));
+    setPropertyImagePreviewUrls((current) => current.filter((_, i) => i !== index));
   }
 
   async function handlePropertySubmit() {
+    if (totalPropertyImageCount < 2 || totalPropertyImageCount > 10) {
+      setError("Each property must have between 2 and 10 images.");
+      return;
+    }
+
     const payload = new FormData();
     payload.set("agent_id", propertyForm.agent_id);
     payload.set("type_logement_id", propertyForm.type_logement_id);
@@ -569,7 +642,7 @@ export function AdminWorkspace({
     payload.set("parking", propertyForm.parking ? "1" : "0");
     payload.set("chauffage", propertyForm.chauffage);
     payload.set("statut_publication", propertyForm.statut_publication);
-    propertyForm.images_text.split("\n").map((entry) => entry.trim()).filter(Boolean).forEach((image) => {
+    propertyExistingImages.forEach((image) => {
       payload.append("images[]", image);
     });
     propertyImageFiles.forEach((file) => {
@@ -666,8 +739,8 @@ export function AdminWorkspace({
 
   async function handleContractSubmit() {
     await runMutation(async () => {
-      await backendRequest("/api/contrats", {
-        method: "POST",
+      await backendRequest(editingContractId ? `/api/contrats/${editingContractId}` : "/api/contrats", {
+        method: editingContractId ? "PATCH" : "POST",
         body: JSON.stringify({
           agent_id: Number(contractForm.agent_id),
           locataire_id: Number(contractForm.locataire_id),
@@ -679,18 +752,50 @@ export function AdminWorkspace({
         }),
       }, token);
 
-      setContractForm({
-        agent_id: "",
-        locataire_id: "",
-        logement_id: "",
-        date_debut: "",
-        date_fin: "",
-        montant: "",
-        statut: "active",
-      });
-      setNotice("Contract created.");
+      resetContractEditor();
+      setNotice(editingContractId ? "Contract updated." : "Contract created.");
       setContractWizardOpen(false);
       setContractWizardStep(0);
+    });
+  }
+
+  function beginEditContract(contrat: Contrat) {
+    setEditingContractId(contrat.id);
+    setContractForm({
+      agent_id: String(contrat.agent.id),
+      locataire_id: String(contrat.locataire.id),
+      logement_id: String(contrat.logement.id),
+      date_debut: contrat.date_debut,
+      date_fin: contrat.date_fin ?? "",
+      montant: contrat.montant,
+      statut: contrat.statut,
+    });
+    setContractWizardStep(0);
+    setContractWizardOpen(true);
+  }
+
+  async function handleDeleteContract(contrat: Contrat) {
+    const { default: Swal } = await import("sweetalert2");
+    const result = await Swal.fire({
+      title: "Delete contract?",
+      text: "Contracts with payments cannot be deleted.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await runMutation(async () => {
+      await backendRequest(`/api/contrats/${contrat.id}`, { method: "DELETE" }, token);
+      setNotice("Contract deleted.");
+      if (contractDetails?.id === contrat.id) {
+        setContractDetails(null);
+      }
     });
   }
 
@@ -846,11 +951,10 @@ export function AdminWorkspace({
         <aside className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} sidebar-dark fixed inset-y-0 left-0 z-40 flex w-[306px] flex-col border-r border-[var(--sidebar-border)] px-5 py-6 transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[306px]"}`}>
           <div className="space-y-1 px-2">
             <div className="flex items-center justify-between">
-              <div className={`flex items-center gap-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
-                  <Building2 className="h-4 w-4" />
-                </div>
-                <div className="text-[18px] font-bold tracking-tight text-white">ImmoFlow</div>
+              <div className="flex items-center">
+                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
+                                  <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
+                                </div>
               </div>
               <button type="button" className="hidden rounded-full p-2 text-white/55 transition hover:bg-white/10 lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
                 <ChevronLeft className={`h-5 w-5 transition-transform ${sidebarCollapsed ? "rotate-180" : ""}`} />
@@ -859,9 +963,7 @@ export function AdminWorkspace({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className={`text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              Real Estate SaaS
-            </div>
+            <div className="h-4" />
           </div>
 
           <nav className="mt-8 space-y-1">
@@ -969,10 +1071,12 @@ export function AdminWorkspace({
             </div>
 
             <div className="flex items-center justify-end gap-4">
-              <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--danger)] border-2 border-white" />
-              </button>
+              <NotificationsPopover
+                token={token}
+                userId={user.id}
+                notifications={notifications}
+                onOpenMessages={() => openTab("notifications")}
+              />
               <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
                 <CircleHelp className="h-4 w-4" />
               </button>
@@ -1440,6 +1544,9 @@ export function AdminWorkspace({
 
                             <div className="space-y-3">
                               <Label>House images</Label>
+                              <div className="text-xs font-medium text-black/60">
+                                {totalPropertyImageCount}/10 images selected (minimum 2)
+                              </div>
                               <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-black/15 bg-[#fbfbfa] px-4 py-5 text-center transition hover:bg-[#f6f6f4]">
                                 <UploadCloud className="h-6 w-6 text-black/45" />
                                 <span className="mt-2 text-sm font-semibold">Upload property photos</span>
@@ -1459,13 +1566,50 @@ export function AdminWorkspace({
                               {preparingImages ? (
                                 <div className="text-xs text-black/50">Preparing images for upload...</div>
                               ) : null}
+                              {propertyExistingImages.length > 0 ? (
+                                <div>
+                                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Existing images</div>
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    {propertyExistingImages.map((imageUrl, index) => (
+                                      <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-black/8 bg-white">
+                                        <img src={imageUrl} alt={`Property ${index + 1}`} className="h-24 w-full object-cover" />
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                                            onClick={() => removeExistingPropertyImage(index)}
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
                               {propertyImageFiles.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                  {propertyImageFiles.map((file) => (
-                                    <span key={`${file.name}-${file.size}`} className="rounded-full bg-black/5 px-3 py-1 text-xs text-black/60">
-                                      {file.name} · {formatFileSize(file.size)}
-                                    </span>
-                                  ))}
+                                <div>
+                                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-black/45">New uploads</div>
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    {propertyImageFiles.map((file, index) => (
+                                      <div key={`${file.name}-${file.size}-${file.lastModified}`} className="overflow-hidden rounded-2xl border border-black/8 bg-white">
+                                        {propertyImagePreviewUrls[index] ? (
+                                          <img src={propertyImagePreviewUrls[index]} alt={file.name} className="h-24 w-full object-cover" />
+                                        ) : null}
+                                        <div className="px-3 py-2 text-xs text-black/55">
+                                          <div className="truncate">{file.name}</div>
+                                          <div className="mt-0.5 text-black/35">{formatFileSize(file.size)}</div>
+                                          <button
+                                            type="button"
+                                            className="mt-2 rounded-lg border border-red-200 px-2 py-1 font-semibold text-red-700 transition hover:bg-red-50"
+                                            onClick={() => removeUploadedPropertyImage(index)}
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               ) : null}
                             </div>
@@ -1496,7 +1640,7 @@ export function AdminWorkspace({
                                   Cancel
                                 </Button>
                               ) : null}
-                              <Button className="rounded-2xl" disabled={busy || preparingImages} onClick={() => void handlePropertySubmit()}>
+                              <Button className="rounded-2xl" disabled={busy || preparingImages || totalPropertyImageCount < 2 || totalPropertyImageCount > 10} onClick={() => void handlePropertySubmit()}>
                                 {editingPropertyId ? "Save changes" : "Add property"}
                               </Button>
                             </div>
@@ -1558,11 +1702,22 @@ export function AdminWorkspace({
                       <div className="grid min-h-[360px] grid-cols-[minmax(0,1fr)_180px]">
                         <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_20%,#f4ead8,transparent_28%),linear-gradient(135deg,#c8d4e7,#f3efe7_58%,#d7e2d5)]">
                           {selectedProperty.logement.images?.[0] ? (
-                            <img
-                              src={selectedProperty.logement.images[0]}
-                              alt={selectedProperty.logement.adresse}
-                              className="absolute inset-0 h-full w-full object-cover"
-                            />
+                            <button
+                              type="button"
+                              className="absolute inset-0 block h-full w-full"
+                              onClick={() =>
+                                setPropertyImageViewer({
+                                  images: selectedProperty.logement.images ?? [],
+                                  index: 0,
+                                })
+                              }
+                            >
+                              <img
+                                src={selectedProperty.logement.images[0]}
+                                alt={selectedProperty.logement.adresse}
+                                className="absolute inset-0 h-full w-full object-cover"
+                              />
+                            </button>
                           ) : null}
                           <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.06))]" />
                           <div className="absolute inset-x-8 top-8 flex items-center justify-between">
@@ -1592,6 +1747,30 @@ export function AdminWorkspace({
                         </div>
                       </div>
                     </div>
+
+                    {selectedProperty.logement.images && selectedProperty.logement.images.length > 1 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {selectedProperty.logement.images.map((image, index) => (
+                          <button
+                            key={`${image}-${index}`}
+                            type="button"
+                            className="overflow-hidden rounded-2xl border border-black/8 bg-white transition hover:opacity-90"
+                            onClick={() =>
+                              setPropertyImageViewer({
+                                images: selectedProperty.logement.images ?? [],
+                                index,
+                              })
+                            }
+                          >
+                            <img
+                              src={image}
+                              alt={`${selectedProperty.logement.adresse} image ${index + 1}`}
+                              className="h-28 w-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
 
                     <div className="grid gap-0 overflow-hidden rounded-[28px] border border-black/6 bg-white md:grid-cols-3">
                       <div className="border-b border-black/6 p-7 md:border-b-0 md:border-r">
@@ -1641,6 +1820,34 @@ export function AdminWorkspace({
                         <div className="mt-4 text-[24px] font-semibold">
                           {selectedProperty.paymentCount}
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-black/6 bg-white p-7">
+                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">House information</div>
+                      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {[
+                          { label: "Bedrooms", value: selectedProperty.logement.chambres ?? "Not set", icon: BedDouble },
+                          { label: "Bathrooms", value: selectedProperty.logement.salles_bain ?? "Not set", icon: Bath },
+                          { label: "Floor", value: selectedProperty.logement.etage ?? "Not set", icon: Layers3 },
+                          { label: "Heating", value: selectedProperty.logement.chauffage ?? "Not set", icon: Flame },
+                          { label: "Area", value: `${selectedProperty.logement.superficie} m²`, icon: Ruler },
+                          { label: "Parking", value: selectedProperty.logement.parking ? "Included" : "Not included", icon: CarFront },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-2xl bg-[#f6f6f4] p-4">
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                              <item.icon className="h-4 w-4 text-[var(--primary)]" />
+                              {item.label}
+                            </div>
+                            <div className="mt-2 font-semibold">{item.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-5 rounded-2xl bg-[#f6f6f4] p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Description</div>
+                        <p className="mt-2 leading-7 text-black/65">
+                          {selectedProperty.logement.description || "No detailed description has been added yet."}
+                        </p>
                       </div>
                     </div>
 
@@ -1975,25 +2182,61 @@ export function AdminWorkspace({
                 </div>
 
                 <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                  <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
                     <div>Ref</div>
                     <div>Tenant</div>
                     <div>Property</div>
                     <div>Start</div>
                     <div>End</div>
                     <div>Rent</div>
+                    <div />
                   </div>
                   {contrats.map((contrat) => (
                     <div
                       key={contrat.id}
-                      className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px] gap-4 border-t border-black/6 px-7 py-4"
+                      className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 border-t border-black/6 px-7 py-4"
                     >
                       <div className="self-center font-mono text-sm text-black/60">CTR-{String(contrat.id).padStart(4, "0")}</div>
-                      <div className="self-center font-semibold">{contrat.locataire.user.name}</div>
+                      <div className="self-center">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={contrat.locataire.user.avatar_url ?? undefined} alt={contrat.locataire.user.name} />
+                            <AvatarFallback>{initials(contrat.locataire.user.name)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-semibold">{contrat.locataire.user.name}</span>
+                        </div>
+                      </div>
                       <div className="self-center text-black/70">{contrat.logement.adresse}</div>
                       <div className="self-center text-black/55">{formatShortDate(contrat.date_debut)}</div>
                       <div className="self-center text-black/55">{formatShortDate(contrat.date_fin)}</div>
                       <div className="self-center">{formatMoney(contrat.montant)} MAD</div>
+                      <div className="flex items-center justify-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Contract actions"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
+                            >
+                              <Ellipsis className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem className="text-gray-600" onClick={() => setContractDetails(contrat)}>
+                              <Eye className="h-4 w-4 text-gray-500" />
+                              Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-blue-700" onClick={() => beginEditContract(contrat)}>
+                              <PencilLine className="h-4 w-4 text-blue-600" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-700 focus:text-red-700" onClick={() => void handleDeleteContract(contrat)}>
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2108,6 +2351,7 @@ export function AdminWorkspace({
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-11 w-11">
+                          <AvatarImage src={row.user.avatar_url ?? undefined} alt={row.user.name} />
                           <AvatarFallback>{initials(row.user.name)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -2218,6 +2462,7 @@ export function AdminWorkspace({
                       >
                         <div className="flex items-center gap-4">
                           <Avatar className="h-12 w-12">
+                            <AvatarImage src={entry.avatar_url ?? undefined} alt={entry.name} />
                             <AvatarFallback>{initials(entry.name)}</AvatarFallback>
                           </Avatar>
                           <div>
@@ -2490,7 +2735,7 @@ export function AdminWorkspace({
             <Dialog open={contractWizardOpen} onOpenChange={setContractWizardOpen}>
               <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[760px]">
                 <DialogHeader className="border-b border-black/8 px-6 py-4">
-                  <DialogTitle className="text-[22px]">Create contract</DialogTitle>
+                  <DialogTitle className="text-[22px]">{editingContractId ? "Edit contract" : "Create contract"}</DialogTitle>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
                     Step {contractWizardStep + 1} of 2
                   </div>
@@ -2652,11 +2897,163 @@ export function AdminWorkspace({
                         disabled={!contractForm.date_debut || !contractForm.montant || busy}
                         onClick={() => void handleContractSubmit()}
                       >
-                        Create contract
+                        {editingContractId ? "Save contract" : "Create contract"}
                       </Button>
                     )}
                   </div>
                 </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={Boolean(contractDetails)} onOpenChange={(open) => !open && setContractDetails(null)}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[640px]">
+                <DialogHeader className="border-b border-black/8 px-6 py-4">
+                  <DialogTitle className="text-[22px]">Contract details</DialogTitle>
+                </DialogHeader>
+                {contractDetails ? (
+                  <div className="space-y-5 px-6 py-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl bg-[#f6f6f4] p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Tenant</div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={contractDetails.locataire.user.avatar_url ?? undefined} alt={contractDetails.locataire.user.name} />
+                            <AvatarFallback>{initials(contractDetails.locataire.user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-semibold">{contractDetails.locataire.user.name}</div>
+                            <div className="text-sm text-black/50">{contractDetails.locataire.user.email}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-[#f6f6f4] p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Agent</div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={contractDetails.agent.user.avatar_url ?? undefined} alt={contractDetails.agent.user.name} />
+                            <AvatarFallback>{initials(contractDetails.agent.user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-semibold">{contractDetails.agent.user.name}</div>
+                            <div className="text-sm text-black/50">{contractDetails.agent.user.email}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-black/8 bg-white p-4">
+                      <div className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Contract ref</span>
+                          <span className="font-semibold">CTR-{String(contractDetails.id).padStart(4, "0")}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Property</span>
+                          <span className="font-semibold">{contractDetails.logement.adresse}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Amount</span>
+                          <span className="font-semibold">{formatMoney(contractDetails.montant)} MAD</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Start</span>
+                          <span className="font-semibold">{formatLongDate(contractDetails.date_debut)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">End</span>
+                          <span className="font-semibold">{formatLongDate(contractDetails.date_fin, "Open")}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Status</span>
+                          <Badge variant={toneForStatus(contractDetails.statut)}>{contractDetails.statut}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/50">Signature</span>
+                          <Badge variant={toneForStatus(contractDetails.signature_status)}>{contractDetails.signature_status}</Badge>
+                        </div>
+                        {contractDetails.signed_at ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-black/50">Signed at</span>
+                            <span className="font-semibold">{formatLongDate(contractDetails.signed_at)}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {contractDetails.signature_data ? (
+                      <div className="rounded-2xl bg-[#f6f6f4] p-4">
+                        <div className="mb-2 text-sm font-semibold text-black/60">Tenant signature</div>
+                        <img src={contractDetails.signature_data} alt="Tenant signature" className="h-24 rounded-xl border border-black/8 bg-white object-contain p-2" />
+                      </div>
+                    ) : null}
+
+                    <Button
+                      className="w-full rounded-2xl"
+                      onClick={() => {
+                        const property = logements.find((entry) => entry.id === contractDetails.logement.id) ?? null;
+                        downloadContractPdf(contractDetails, property);
+                      }}
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Download contract PDF
+                    </Button>
+                  </div>
+                ) : null}
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={Boolean(propertyImageViewer)} onOpenChange={(open) => !open && setPropertyImageViewer(null)}>
+              <DialogContent className="overflow-hidden rounded-3xl p-0 sm:max-w-[980px]">
+                {propertyImageViewer ? (
+                  <div className="bg-black">
+                    <div className="relative">
+                      <img
+                        src={propertyImageViewer.images[propertyImageViewer.index]}
+                        alt={`Property image ${propertyImageViewer.index + 1}`}
+                        className="h-[68vh] w-full object-contain"
+                      />
+                      {propertyImageViewer.images.length > 1 ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border-white/30 bg-black/45 text-white hover:bg-black/65"
+                            onClick={() =>
+                              setPropertyImageViewer((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      index: (current.index - 1 + current.images.length) % current.images.length,
+                                    }
+                                  : current,
+                              )
+                            }
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border-white/30 bg-black/45 text-white hover:bg-black/65"
+                            onClick={() =>
+                              setPropertyImageViewer((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      index: (current.index + 1) % current.images.length,
+                                    }
+                                  : current,
+                              )
+                            }
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                    <div className="px-4 py-3 text-center text-sm font-medium text-white/85">
+                      {propertyImageViewer.index + 1} / {propertyImageViewer.images.length}
+                    </div>
+                  </div>
+                ) : null}
               </DialogContent>
             </Dialog>
 

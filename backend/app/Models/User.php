@@ -99,4 +99,27 @@ class User extends Authenticatable
     {
         return in_array($this->role, $roles, true);
     }
+
+    public static function defaultAvatarForRole(?string $role): string
+    {
+        return match ($role) {
+            'super_admin' => '/assets/profile/super_admin.png',
+            'admin' => '/assets/profile/admin.png',
+            'agent' => '/assets/profile/agent.png',
+            default => '/assets/profile/user_normal.png',
+        };
+    }
+
+    public function getAvatarUrlAttribute(?string $value): string
+    {
+        $avatar = is_string($value) ? trim($value) : '';
+
+        if ($avatar !== '') {
+            return $avatar;
+        }
+
+        $role = $this->attributes['role'] ?? $this->role ?? null;
+
+        return self::defaultAvatarForRole(is_string($role) ? $role : null);
+    }
 }

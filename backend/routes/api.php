@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommuneController;
 use App\Http\Controllers\ContratController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LogementController;
 use App\Http\Controllers\NotificationController;
@@ -39,6 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications', [NotificationController::class, 'store']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::get('/conversations', [ConversationController::class, 'index']);
+    Route::post('/conversations', [ConversationController::class, 'store']);
+    Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'reply']);
 
     Route::middleware('role:super_admin,admin,agent,locataire')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
@@ -54,12 +58,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/type-logements', [TypeLogementController::class, 'store']);
         Route::post('/logements', [LogementController::class, 'store']);
         Route::patch('/logements/{logement}', [LogementController::class, 'update']);
+        Route::delete('/logements/{logement}', [LogementController::class, 'destroy']);
         Route::post('/contrats', [ContratController::class, 'store']);
+        Route::patch('/contrats/{contrat}', [ContratController::class, 'update']);
+        Route::delete('/contrats/{contrat}', [ContratController::class, 'destroy']);
         Route::post('/paiements', [PaiementController::class, 'store']);
         Route::patch('/paiements/{paiement}/status', [PaiementController::class, 'updateStatus']);
     });
 
     Route::middleware('role:locataire')->group(function () {
         Route::post('/contrats/{contrat}/sign', [ContratController::class, 'sign']);
+        Route::patch('/paiements/{paiement}/approve', [PaiementController::class, 'approve']);
     });
 });

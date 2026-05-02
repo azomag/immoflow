@@ -1,9 +1,9 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import {
-  Bell,
   CalendarClock,
   CircleHelp,
   Download,
@@ -19,14 +19,17 @@ import type { AuthenticatedUser, Contrat, Logement, NotificationRecord, Paiement
 import { backendRequest } from "@/lib/api";
 import { downloadContractPdf, downloadReceiptPdf } from "@/lib/document-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
+import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   formatLongDate,
   formatMoney,
   formatShortDate,
+  initials,
   toneForStatus,
 } from "@/components/dashboard/workspace-utils";
 
@@ -282,10 +285,9 @@ export function LocataireWorkspace({
         <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-6 md:px-8">
           <div className="flex items-center gap-10">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
-                <Home className="h-4 w-4 text-white" />
-              </div>
-              <div className="text-[19px] font-bold tracking-tight text-[var(--foreground)]">ImmoFlow</div>
+               <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
+                                <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
+                              </div>
             </div>
 
             <nav className="hidden items-center gap-8 md:flex">
@@ -309,12 +311,12 @@ export function LocataireWorkspace({
           </div>
 
           <div className="flex items-center gap-4">
-            <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
-              <Bell className="h-4 w-4" />
-              {pendingContract || pendingPayment ? (
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--danger)] border-2 border-white" />
-              ) : null}
-            </button>
+            <NotificationsPopover
+              token={token}
+              userId={user.id}
+              notifications={notifications}
+              onOpenMessages={() => setActiveTab("notifications")}
+            />
             <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
               <CircleHelp className="h-4 w-4" />
             </button>
@@ -359,6 +361,16 @@ export function LocataireWorkspace({
             </div>
 
             <div>
+              <div className="mb-5 inline-flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-3 py-2 shadow-[var(--shadow-sm)]">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
+                  <AvatarFallback>{initials(user.name)}</AvatarFallback>
+                </Avatar>
+                <div className="text-sm">
+                  <div className="font-semibold text-[var(--foreground)]">{user.name}</div>
+                  <div className="text-[var(--muted-foreground)]">Tenant account</div>
+                </div>
+              </div>
               <h1 className="text-[48px] md:text-[62px] font-bold tracking-tight text-[var(--foreground)]">Good morning, {user.name.split(" ")[0]}.</h1>
               <p className="mt-4 max-w-3xl text-[18px] leading-8 text-[var(--muted-foreground)]">
                 {currentResidence

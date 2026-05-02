@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import type { AuthenticatedUser } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
@@ -63,6 +63,14 @@ export function ProfilePanel({
     () => (avatarFile ? URL.createObjectURL(avatarFile) : form.avatar_url),
     [avatarFile, form.avatar_url]
   );
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview && avatarPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
 
   async function saveProfile() {
     setBusy(true);
@@ -171,7 +179,7 @@ export function ProfilePanel({
               </div>
               <div>
                 <div className="text-lg font-bold text-[var(--foreground)]">{form.name}</div>
-                <div className="mt-0.5 text-sm text-[var(--muted-foreground)]">{user.email}</div>
+                <div className="mt-0.5 text-sm text-[var(--muted-foreground)]">{form.email}</div>
                 <div className="mt-2 inline-flex items-center rounded-full bg-[rgba(1,73,124,0.1)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--primary)]">
                   {roleLabel[user.role] ?? user.role}
                 </div>

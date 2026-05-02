@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "bash scripts/run-all.sh",
+    "start": "npm run dev",
+    "stop": "bash scripts/stop-all.sh",
+    "stop:all": "STOP_XAMPP=1 bash scripts/stop-all.sh",
+    "xampp:start": "sudo /opt/lampp/lampp start",
+    "xampp:stop": "sudo /opt/lampp/lampp stop",
+    "xampp:status": "sudo /opt/lampp/lampp status"
+  }
+}

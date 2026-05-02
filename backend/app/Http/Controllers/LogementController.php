@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Agent;
 use App\Models\Logement;
 use App\Models\User;
+use App\Support\DashboardNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 class LogementController extends Controller
 {
@@ -47,8 +50,10 @@ class LogementController extends Controller
             'chauffage' => ['nullable', 'string', 'max:100'],
             'statut_publication' => ['nullable', 'string', 'max:50'],
             'images' => ['nullable', 'array'],
-            'images.*' => ['nullable', 'url', 'max:2048'],
-        ]);
+            'images.*' => ['nullable', 'string', 'max:2048'],
+            'image_files' => ['nullable', 'array', 'max:10'],
+            'image_files.*' => ['image', 'max:2048'],
+        ], $this->imageValidationMessages());
 
         $agentId = $user->role === 'agent'
             ? $user->agentProfile?->id
@@ -57,6 +62,13 @@ class LogementController extends Controller
         if (! $agentId || ! Agent::query()->whereKey($agentId)->exists()) {
             return response()->json([
                 'message' => 'A valid agent is required.',
+            ], 422);
+        }
+
+        $requestedImageCount = $this->requestedImageCount($request, $validated['images'] ?? []);
+        if ($requestedImageCount < 2 || $requestedImageCount > 10) {
+            return response()->json([
+                'message' => 'A property must include between 2 and 10 images.',
             ], 422);
         }
 
@@ -75,8 +87,20 @@ class LogementController extends Controller
             'parking' => $validated['parking'] ?? false,
             'chauffage' => $validated['chauffage'] ?? null,
             'statut_publication' => $validated['statut_publication'] ?? 'listed',
-            'images' => $validated['images'] ?? [],
+            'images' => $this->collectImages($request, $validated['images'] ?? []),
         ]);
+
+        $logement->loadMissing('agent');
+        $agentUserId = $logement->agent?->user_id;
+        $recipients = $user->role === 'agent'
+            ? DashboardNotification::adminRecipientIds()
+            : [$agentUserId];
+        DashboardNotification::send(
+            $user,
+            $recipients,
+            'Property created',
+            sprintf('%s created property "%s".', $user->name, $logement->adresse),
+        );
 
         return response()->json([
             'message' => 'Property created.',
@@ -111,8 +135,10 @@ class LogementController extends Controller
             'chauffage' => ['nullable', 'string', 'max:100'],
             'statut_publication' => ['nullable', 'string', 'max:50'],
             'images' => ['nullable', 'array'],
-            'images.*' => ['nullable', 'url', 'max:2048'],
-        ]);
+            'images.*' => ['nullable', 'string', 'max:2048'],
+            'image_files' => ['nullable', 'array', 'max:10'],
+            'image_files.*' => ['image', 'max:2048'],
+        ], $this->imageValidationMessages());
 
         $agentId = $user->role === 'agent'
             ? $user->agentProfile?->id
@@ -121,6 +147,13 @@ class LogementController extends Controller
         if (! $agentId || ! Agent::query()->whereKey($agentId)->exists()) {
             return response()->json([
                 'message' => 'A valid agent is required.',
+            ], 422);
+        }
+
+        $requestedImageCount = $this->requestedImageCount($request, $validated['images'] ?? []);
+        if ($requestedImageCount < 2 || $requestedImageCount > 10) {
+            return response()->json([
+                'message' => 'A property must include between 2 and 10 images.',
             ], 422);
         }
 
@@ -139,13 +172,107 @@ class LogementController extends Controller
             'parking' => $validated['parking'] ?? false,
             'chauffage' => $validated['chauffage'] ?? null,
             'statut_publication' => $validated['statut_publication'] ?? 'listed',
-            'images' => $validated['images'] ?? [],
+            'images' => $this->collectImages($request, $validated['images'] ?? []),
         ]);
+
+        $logement->loadMissing('agent');
+        $agentUserId = $logement->agent?->user_id;
+        $recipients = array_merge(
+            [$agentUserId],
+            DashboardNotification::adminRecipientIds(),
+        );
+        DashboardNotification::send(
+            $user,
+            $recipients,
+            'Property updated',
+            sprintf('%s updated property "%s".', $user->name, $logement->adresse),
+        );
 
         return response()->json([
             'message' => 'Property updated.',
             'logement' => $logement->fresh(['agent.user', 'commune', 'typeLogement']),
         ]);
+    }
+
+    public function destroy(Request $request, Logement $logement): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if ($user->role === 'agent' && $logement->agent_id !== $user->agentProfile?->id) {
+            return response()->json([
+                'message' => 'You can only delete your own properties.',
+            ], 403);
+        }
+
+        if ($logement->contrats()->exists()) {
+            return response()->json([
+                'message' => 'This property has contracts attached. Move it to draft instead of deleting it.',
+            ], 422);
+        }
+
+        $logement->loadMissing('agent');
+        $agentUserId = $logement->agent?->user_id;
+        $recipients = array_merge(
+            [$agentUserId],
+            DashboardNotification::adminRecipientIds(),
+        );
+        DashboardNotification::send(
+            $user,
+            $recipients,
+            'Property deleted',
+            sprintf('%s deleted property "%s".', $user->name, $logement->adresse),
+        );
+
+        $logement->delete();
+
+        return response()->json([
+            'message' => 'Property deleted.',
+        ]);
+    }
+
+    /**
+     * @param array<int, string> $existingImages
+     * @return array<int, string>
+     */
+    private function collectImages(Request $request, array $existingImages = []): array
+    {
+        $images = array_values(array_filter($existingImages));
+        $uploadPath = public_path('uploads/properties');
+
+        File::ensureDirectoryExists($uploadPath);
+
+        foreach ($request->file('image_files', []) as $file) {
+            $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+            $file->move($uploadPath, $filename);
+            $images[] = url('/uploads/properties/'.$filename);
+        }
+
+        return $images;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function imageValidationMessages(): array
+    {
+        return [
+            'image_files.*.uploaded' => 'The image is too large for this server. Please choose a smaller image.',
+            'image_files.max' => 'You can upload a maximum of 10 property images.',
+            'image_files.*.image' => 'Only image files are allowed.',
+            'image_files.*.max' => 'Each image must be 2 MB or less.',
+        ];
+    }
+
+    /**
+     * @param array<int, string> $existingImages
+     */
+    private function requestedImageCount(Request $request, array $existingImages): int
+    {
+        $manualImages = array_values(array_filter($existingImages, fn ($image) => is_string($image) && trim($image) !== ''));
+        $uploadedImages = $request->file('image_files', []);
+
+        return count($manualImages) + count($uploadedImages);
     }
 
 }

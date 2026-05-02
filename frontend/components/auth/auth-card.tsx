@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { getProviders, signIn } from "next-auth/react";
@@ -267,11 +268,10 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
       {/* ── Left Decorative Panel ── */}
       <div className="hidden lg:flex lg:w-[44%] flex-col justify-between bg-[#eaf6fb] p-10 xl:p-14">
         {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl icon-indigo shadow-[0_4px_12px_rgba(1,79,134,0.4)]">
-            <Building2 className="h-5 w-5" />
+        <div className="flex items-center">
+          <div className="flex h-30 w-30 items-center justify-center overflow-hidden ">
+            <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" priority />
           </div>
-          <span className="text-[18px] font-bold text-black">ImmoFlow</span>
         </div>
 
         {/* Hero copy */}
@@ -316,11 +316,10 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
       {/* ── Right Form Panel ── */}
       <div className="flex flex-1 flex-col items-center justify-center bg-[var(--background)] px-6 py-10 md:px-12 lg:px-16">
         {/* Mobile logo */}
-        <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl icon-indigo">
-            <Building2 className="h-4 w-4" />
+        <div className="mb-8 flex items-center lg:hidden">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.25)]">
+            <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={36} height={36} className="h-full w-full object-cover" />
           </div>
-          <span className="text-lg font-bold">ImmoFlow</span>
         </div>
 
         <div className="w-full max-w-md">

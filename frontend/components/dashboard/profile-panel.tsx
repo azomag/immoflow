@@ -346,16 +346,16 @@ export function ProfilePanel({
 
           {/* Plan card */}
           <div className="overflow-hidden rounded-3xl shadow-[var(--shadow-lg)]">
-            <div className="stat-indigo p-7 text-white">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/60">
+            <div className="stat-indigo p-7">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
                 Plan Status
               </div>
               <div className="mt-3 text-4xl font-bold">Enterprise</div>
-              <div className="mt-1 text-sm text-white/60">ImmoFlow workspace</div>
-              <div className="mt-5 h-2 rounded-full bg-white/20">
-                <div className="h-full w-[84%] rounded-full bg-white/90" />
+              <div className="mt-1 text-sm text-[var(--muted-foreground)]">ImmoFlow workspace</div>
+              <div className="mt-5 h-2 rounded-full bg-[var(--accent)]">
+                <div className="h-full w-[84%] rounded-full bg-[var(--primary)]/70" />
               </div>
-              <div className="mt-2 text-xs text-white/50">84% of resources used</div>
+              <div className="mt-2 text-xs text-[var(--muted-foreground)]">84% of resources used</div>
             </div>
           </div>
 
@@ -363,13 +363,13 @@ export function ProfilePanel({
           <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
             <div className="bg-[var(--sidebar-bg)] px-7 py-5">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-white/60" />
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+                <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
                   Invoice Template
                 </span>
               </div>
-              <div className="mt-2 text-lg font-bold text-white">Premium rental invoice</div>
-              <div className="mt-1 text-xs text-white/50">
+              <div className="mt-2 text-lg font-bold text-[var(--foreground)]">Premium rental invoice</div>
+              <div className="mt-1 text-xs text-[var(--muted-foreground)]">
                 Used when generating PDF invoices from property details.
               </div>
             </div>

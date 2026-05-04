@@ -404,8 +404,8 @@ export function LocataireWorkspace({
                 </div>
               </div>
 
-              <div className="rounded-3xl stat-indigo p-7 text-white shadow-[var(--shadow-primary)] card-lift">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Next Due</div>
+              <div className="rounded-3xl stat-indigo p-7 shadow-[var(--shadow-primary)] card-lift">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Next Due</div>
                 <div className="mt-8 text-[48px] font-bold tracking-tight">
                   {formatShortDate(pendingPayment?.date_paiement ?? latestPayment?.date_paiement ?? null, "--")}
                 </div>

@@ -966,10 +966,10 @@ export function AdminWorkspace({
                                   <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
                                 </div>
               </div>
-              <button type="button" className="hidden rounded-full p-2 text-white/55 transition hover:bg-white/10 lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
+              <button type="button" className="hidden rounded-full p-2 text-[var(--sidebar-text)]/70 transition hover:bg-[var(--sidebar-hover-bg)] lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
                 <ChevronLeft className={`h-5 w-5 transition-transform ${sidebarCollapsed ? "rotate-180" : ""}`} />
               </button>
-              <button type="button" className="rounded-full p-2 text-white/55 lg:hidden" onClick={() => setSidebarOpen(false)}>
+              <button type="button" className="rounded-full p-2 text-[var(--sidebar-text)]/70 lg:hidden" onClick={() => setSidebarOpen(false)}>
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1004,10 +1004,10 @@ export function AdminWorkspace({
           </nav>
 
           <div className="mt-auto space-y-5 pt-10">
-            <div className={`rounded-[20px] border border-[var(--sidebar-border)] bg-white/5 p-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+            <div className={`rounded-[20px] border border-[var(--sidebar-border)] bg-[var(--accent)]/25 p-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-hover-bg)]"
                 onClick={() => setCreateMenuOpen((current) => !current)}
               >
                 <span className="flex items-center gap-2">
@@ -1023,16 +1023,16 @@ export function AdminWorkspace({
               >
                 <div className="min-h-0 overflow-hidden">
                   <div className="space-y-1 pt-1">
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openCreateProperty}>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openCreateProperty}>
                       Add property
                     </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openContractWizard}>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openContractWizard}>
                       Create contract
                     </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={openUserWizard}>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openUserWizard}>
                       Add user
                     </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-white/10 hover:text-white" onClick={() => openTab("notifications")}>
+                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={() => openTab("notifications")}>
                       New message
                     </button>
                   </div>
@@ -1041,7 +1041,7 @@ export function AdminWorkspace({
             </div>
 
             <div className={`space-y-2 border-t border-[var(--sidebar-border)] pt-4 text-[15px] text-[var(--sidebar-text)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-white/10 hover:text-white">
+              <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]">
                 <CircleHelp className="h-5 w-5 shrink-0" />
                 <span>Support</span>
               </button>
@@ -1156,16 +1156,16 @@ export function AdminWorkspace({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl stat-indigo p-7 text-white shadow-[var(--shadow-primary)] card-lift">
+                  <div className="rounded-3xl stat-indigo p-7 shadow-[var(--shadow-primary)] card-lift">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
                           Pending Visits
                         </div>
                         <div className="mt-4 text-5xl font-bold tracking-tight">{pendingVisits}</div>
                       </div>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-                        <CalendarDays className="h-6 w-6 text-white" />
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent)]">
+                        <CalendarDays className="h-6 w-6 text-[var(--primary)]" />
                       </div>
                     </div>
                   </div>

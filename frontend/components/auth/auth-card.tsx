@@ -38,14 +38,14 @@ const choices: Array<{
     label: "Agent",
     description: "Create properties, contracts, and collect payments.",
     icon: Building2,
-    iconClass: "bg-[linear-gradient(135deg,#01497c_0%,#2c7da0_100%)] text-white",
+    iconClass: "bg-[linear-gradient(135deg,#7f5539_0%,#9c6644_100%)] text-white",
   },
   {
     id: "locataire",
     label: "Locataire",
     description: "Access contracts, residence details, and receipts.",
     icon: UserRound,
-    iconClass: "bg-[linear-gradient(135deg,#15803d_0%,#22c55e_100%)] text-white",
+    iconClass: "bg-[linear-gradient(135deg,#b08968_0%,#ddb892_100%)] text-white",
   },
   {
     id: "administration",

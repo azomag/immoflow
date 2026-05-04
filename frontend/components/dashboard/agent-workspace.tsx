@@ -340,11 +340,18 @@ export function AgentWorkspace({
     setBusy(true);
     setError(null);
     setNotice(null);
+    let actionCompleted = false;
 
     try {
       await action();
+      actionCompleted = true;
       await reload();
     } catch (mutationError) {
+      if (actionCompleted) {
+        setNotice((current) => current ?? "Saved. Data refresh is taking longer, please refresh once.");
+        return;
+      }
+
       setError(mutationError instanceof Error ? mutationError.message : "Request failed.");
     } finally {
       setBusy(false);
@@ -956,43 +963,45 @@ export function AgentWorkspace({
                       </button>
                     </div>
 
-                    <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
-                      <div className="grid grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                        <div>Ref</div>
-                        <div>Property Name</div>
-                        <div>Status</div>
-                        <div>Next Event</div>
-                      </div>
-                      {filteredProperties.slice(0, 4).map((property) => (
-                        <button
-                          key={property.logement.id}
-                          type="button"
-                          onClick={() => {
-                            openTab("properties");
-                            setSelectedPropertyId(property.logement.id);
-                          }}
-                          className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
-                        >
-                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
-                              {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
-                              <div className="text-xs text-[var(--muted-foreground)]">
-                                {property.tenantName ?? property.logement.commune.nom}
+                    <div className="overflow-x-auto rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+                      <div className="min-w-[760px]">
+                        <div className="grid grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                          <div>Ref</div>
+                          <div>Property Name</div>
+                          <div>Status</div>
+                          <div>Next Event</div>
+                        </div>
+                        {filteredProperties.slice(0, 4).map((property) => (
+                          <button
+                            key={property.logement.id}
+                            type="button"
+                            onClick={() => {
+                              openTab("properties");
+                              setSelectedPropertyId(property.logement.id);
+                            }}
+                            className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
+                          >
+                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
+                                {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
+                                <div className="text-xs text-[var(--muted-foreground)]">
+                                  {property.tenantName ?? property.logement.commune.nom}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="self-center">
-                            <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
-                          </div>
-                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
-                            {formatShortDate(property.nextEventDate)}
-                          </div>
-                        </button>
-                      ))}
+                            <div className="self-center">
+                              <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
+                            </div>
+                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
+                              {formatShortDate(property.nextEventDate)}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -1036,36 +1045,37 @@ export function AgentWorkspace({
                     Create property
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>Ref</div>
-                    <div>Property</div>
-                    <div>Type</div>
-                    <div>Area</div>
-                    <div>Rent</div>
-                    <div>Status</div>
-                    <div />
-                  </div>
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[980px]">
+                    <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Ref</div>
+                      <div>Property</div>
+                      <div>Type</div>
+                      <div>Area</div>
+                      <div>Rent</div>
+                      <div>Status</div>
+                      <div />
+                    </div>
 
-                  {filteredProperties.map((property) => (
-                    <div
-                      key={property.logement.id}
-                      onClick={() => setSelectedPropertyId(property.logement.id)}
-                      className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
-                    >
-                      <div className="self-center text-[15px] text-black/60">{property.ref}</div>
-                      <div className="min-w-0">
-                        <div className="truncate text-[17px] font-semibold">{property.logement.adresse}</div>
-                        <div className="truncate text-sm text-black/45">{property.logement.commune.nom}</div>
-                      </div>
-                      <div className="self-center text-[15px]">{property.logement.type_logement.nom_type}</div>
-                      <div className="self-center text-[15px]">{property.logement.superficie} m²</div>
-                      <div className="self-center text-[15px]">{formatMoney(property.logement.loyer)} MAD</div>
-                      <div className="self-center">
-                        <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
-                      </div>
-                      <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
-                        <DropdownMenu>
+                    {filteredProperties.map((property) => (
+                      <div
+                        key={property.logement.id}
+                        onClick={() => setSelectedPropertyId(property.logement.id)}
+                        className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
+                      >
+                        <div className="self-center text-[15px] text-black/60">{property.ref}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-[17px] font-semibold">{property.logement.adresse}</div>
+                          <div className="truncate text-sm text-black/45">{property.logement.commune.nom}</div>
+                        </div>
+                        <div className="self-center text-[15px]">{property.logement.type_logement.nom_type}</div>
+                        <div className="self-center text-[15px]">{property.logement.superficie} m²</div>
+                        <div className="self-center text-[15px]">{formatMoney(property.logement.loyer)} MAD</div>
+                        <div className="self-center">
+                          <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
+                        </div>
+                        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
                               type="button"
@@ -1110,6 +1120,7 @@ export function AgentWorkspace({
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
 
               </section>
@@ -1357,21 +1368,22 @@ export function AgentWorkspace({
                     Create contract
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>ID</div>
-                    <div>Property</div>
-                    <div>Tenant</div>
-                    <div>Amount</div>
-                    <div>Status</div>
-                    <div>Sign</div>
-                    <div />
-                  </div>
-                  {contrats.map((contrat) => (
-                    <div
-                      key={contrat.id}
-                      className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 border-t border-black/6 px-7 py-4"
-                    >
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[980px]">
+                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>ID</div>
+                      <div>Property</div>
+                      <div>Tenant</div>
+                      <div>Amount</div>
+                      <div>Status</div>
+                      <div>Sign</div>
+                      <div />
+                    </div>
+                    {contrats.map((contrat) => (
+                      <div
+                        key={contrat.id}
+                        className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
                       <div className="self-center text-black/60">IF-{String(contrat.id).padStart(4, "0")}</div>
                       <div className="self-center">{contrat.logement.adresse}</div>
                       <div className="self-center">
@@ -1422,6 +1434,7 @@ export function AgentWorkspace({
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -1435,19 +1448,20 @@ export function AgentWorkspace({
                     Record payment
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>ID</div>
-                    <div>Tenant</div>
-                    <div>Amount</div>
-                    <div>Date</div>
-                    <div>Status</div>
-                  </div>
-                  {paiements.map((paiement) => (
-                    <div
-                      key={paiement.id}
-                      className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
-                    >
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>ID</div>
+                      <div>Tenant</div>
+                      <div>Amount</div>
+                      <div>Date</div>
+                      <div>Status</div>
+                    </div>
+                    {paiements.map((paiement) => (
+                      <div
+                        key={paiement.id}
+                        className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
                       <div className="self-center text-black/60">PM-{String(paiement.id).padStart(4, "0")}</div>
                       <div className="self-center">{paiement.contrat.locataire.user.name}</div>
                       <div className="self-center">{formatMoney(paiement.montant)} MAD</div>
@@ -1457,6 +1471,7 @@ export function AgentWorkspace({
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -1466,8 +1481,6 @@ export function AgentWorkspace({
                 token={token}
                 user={user}
                 users={users}
-                notifications={notifications}
-                reload={reload}
               />
             ) : null}
 
@@ -1476,15 +1489,16 @@ export function AgentWorkspace({
             ) : null}
 
             {activeTab === "tenants" ? (
-              <section className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                  <div>Tenant</div>
-                  <div>Email</div>
-                  <div>Active Property</div>
-                  <div>Contract</div>
-                  <div>Receipts</div>
-                </div>
-                {tenantUsers.map((entry) => {
+              <section className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                <div className="min-w-[920px]">
+                  <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                    <div>Tenant</div>
+                    <div>Email</div>
+                    <div>Active Property</div>
+                    <div>Contract</div>
+                    <div>Receipts</div>
+                  </div>
+                  {tenantUsers.map((entry) => {
                   const tenantContract =
                     contrats.find((contrat) => contrat.locataire.user.id === entry.id) ?? null;
 
@@ -1536,6 +1550,7 @@ export function AgentWorkspace({
                     </div>
                   );
                 })}
+                </div>
               </section>
             ) : null}
           </div>

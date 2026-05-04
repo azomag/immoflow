@@ -142,11 +142,18 @@ export function LocataireWorkspace({
     setBusy(true);
     setError(null);
     setNotice(null);
+    let actionCompleted = false;
 
     try {
       await action();
+      actionCompleted = true;
       await reload();
     } catch (mutationError) {
+      if (actionCompleted) {
+        setNotice((current) => current ?? "Saved. Data refresh is taking longer, please refresh once.");
+        return;
+      }
+
       setError(mutationError instanceof Error ? mutationError.message : "Request failed.");
     } finally {
       setBusy(false);
@@ -452,36 +459,38 @@ export function LocataireWorkspace({
                 </button>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
-                <div className="grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 bg-[var(--muted)] px-7 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                  <div>Date</div>
-                  <div>Reference</div>
-                  <div>Amount</div>
-                  <div>Status</div>
-                  <div>Receipt</div>
-                </div>
-                {sortedPayments.slice(0, 5).map((payment) => (
-                  <div
-                    key={payment.id}
-                    className="table-row-hover grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 border-t border-[var(--border)] px-7 py-4 transition-colors"
-                  >
-                    <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{formatShortDate(payment.date_paiement)}</div>
-                    <div className="self-center text-[15px] font-medium text-[var(--foreground)]">
-                      RENT-{new Date(payment.date_paiement).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }).toUpperCase()}
-                    </div>
-                    <div className="self-center text-[15px] font-bold text-[var(--foreground)]">
-                      {formatMoney(payment.montant)} MAD
-                    </div>
-                    <div className="self-center">
-                      <Badge variant={toneForStatus(payment.statut) as any}>{payment.statut}</Badge>
-                    </div>
-                    <div className="self-center text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]">
-                      <button type="button" onClick={() => handleReceiptDownload(payment)}>
-                        <Download className="h-5 w-5" />
-                      </button>
-                    </div>
+              <div className="overflow-x-auto rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+                <div className="min-w-[760px]">
+                  <div className="grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 bg-[var(--muted)] px-7 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                    <div>Date</div>
+                    <div>Reference</div>
+                    <div>Amount</div>
+                    <div>Status</div>
+                    <div>Receipt</div>
                   </div>
-                ))}
+                  {sortedPayments.slice(0, 5).map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="table-row-hover grid grid-cols-[180px_1fr_180px_160px_90px] gap-4 border-t border-[var(--border)] px-7 py-4 transition-colors"
+                    >
+                      <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{formatShortDate(payment.date_paiement)}</div>
+                      <div className="self-center text-[15px] font-medium text-[var(--foreground)]">
+                        RENT-{new Date(payment.date_paiement).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }).toUpperCase()}
+                      </div>
+                      <div className="self-center text-[15px] font-bold text-[var(--foreground)]">
+                        {formatMoney(payment.montant)} MAD
+                      </div>
+                      <div className="self-center">
+                        <Badge variant={toneForStatus(payment.statut) as any}>{payment.statut}</Badge>
+                      </div>
+                      <div className="self-center text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]">
+                        <button type="button" onClick={() => handleReceiptDownload(payment)}>
+                          <Download className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -575,39 +584,41 @@ export function LocataireWorkspace({
               <p className="mt-2 text-black/55">All receipts and rent operations tied to your active account.</p>
             </div>
 
-            <div className="overflow-hidden rounded-[28px] border border-black/6 bg-white">
-              <div className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 bg-[#fafafa] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                <div>Date</div>
-                <div>Property</div>
-                <div>Amount</div>
-                <div>Mode</div>
-                <div>Status</div>
-                <div>Action</div>
-              </div>
-              {sortedPayments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 border-t border-black/6 px-7 py-5"
-                >
-                  <div className="self-center">{formatShortDate(payment.date_paiement)}</div>
-                  <div className="self-center">{payment.contrat.logement.adresse}</div>
-                  <div className="self-center font-semibold">{formatMoney(payment.montant)} MAD</div>
-                  <div className="self-center">{payment.mode}</div>
-                  <div className="self-center">
-                    <Badge variant={toneForStatus(payment.statut)}>{payment.statut}</Badge>
-                  </div>
-                  <div className="flex items-center gap-3 self-center">
-                    {payment.statut === "awaiting_tenant_approval" ? (
-                      <Button className="h-9 rounded-xl px-3 text-xs" disabled={busy} onClick={() => void handleApprovePayment(payment)}>
-                        Approve
-                      </Button>
-                    ) : null}
-                    <button type="button" onClick={() => handleReceiptDownload(payment)}>
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
+            <div className="overflow-x-auto rounded-[28px] border border-black/6 bg-white">
+              <div className="min-w-[980px]">
+                <div className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 bg-[#fafafa] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                  <div>Date</div>
+                  <div>Property</div>
+                  <div>Amount</div>
+                  <div>Mode</div>
+                  <div>Status</div>
+                  <div>Action</div>
                 </div>
-              ))}
+                {sortedPayments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="grid grid-cols-[160px_1fr_170px_140px_140px_170px] gap-4 border-t border-black/6 px-7 py-5"
+                  >
+                    <div className="self-center">{formatShortDate(payment.date_paiement)}</div>
+                    <div className="self-center">{payment.contrat.logement.adresse}</div>
+                    <div className="self-center font-semibold">{formatMoney(payment.montant)} MAD</div>
+                    <div className="self-center">{payment.mode}</div>
+                    <div className="self-center">
+                      <Badge variant={toneForStatus(payment.statut)}>{payment.statut}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 self-center">
+                      {payment.statut === "awaiting_tenant_approval" ? (
+                        <Button className="h-9 rounded-xl px-3 text-xs" disabled={busy} onClick={() => void handleApprovePayment(payment)}>
+                          Approve
+                        </Button>
+                      ) : null}
+                      <button type="button" onClick={() => handleReceiptDownload(payment)}>
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -617,8 +628,6 @@ export function LocataireWorkspace({
             token={token}
             user={user}
             users={users}
-            notifications={notifications}
-            reload={reload}
           />
         ) : null}
 

@@ -31,6 +31,8 @@ type DashboardData = {
   notifications: NotificationRecord[];
 };
 
+const DASHBOARD_RETRY_DELAYS_MS = [1500, 2500, 4000, 6500, 9000];
+
 async function fetchDashboardData(
   role: AppRole,
   token: string
@@ -76,6 +78,30 @@ async function fetchDashboardData(
   };
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      return status;
+    }
+  }
+
+  return null;
+}
+
+function isRetryableDashboardError(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  if (status === null) {
+    return true;
+  }
+
+  return status >= 500 || status === 429;
+}
+
 function DashboardSkeleton() {
   return (
     <div className="flex min-h-screen">
@@ -92,14 +118,14 @@ function DashboardSkeleton() {
         </div>
       </div>
       {/* Content skeleton */}
-      <div className="flex-1 p-8 space-y-8">
+      <div className="flex-1 space-y-8 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-14 w-full rounded-2xl" />
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full rounded-3xl" />
           ))}
         </div>
-        <div className="grid grid-cols-[1fr_320px] gap-8">
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_320px]">
           <Skeleton className="h-80 w-full rounded-3xl" />
           <Skeleton className="h-80 w-full rounded-3xl" />
         </div>
@@ -162,16 +188,41 @@ export function RoleDashboard({ role }: { role: AppRole }) {
     setData(dashboardData);
   }
 
+  async function loadDataWithRetry() {
+    if (!token) return;
+
+    let lastError: unknown = null;
+    const maxAttempts = DASHBOARD_RETRY_DELAYS_MS.length + 1;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const dashboardData = await fetchDashboardData(role, token);
+        setData(dashboardData);
+        setError(null);
+        return;
+      } catch (loadError) {
+        lastError = loadError;
+
+        const hasMoreAttempts = attempt < maxAttempts - 1;
+        if (!hasMoreAttempts || !isRetryableDashboardError(loadError)) {
+          throw loadError;
+        }
+
+        await wait(DASHBOARD_RETRY_DELAYS_MS[attempt] ?? 1000);
+      }
+    }
+
+    throw lastError;
+  }
+
   useEffect(() => {
     if (!token) return;
 
     let cancelled = false;
 
-    void fetchDashboardData(role, token)
-      .then((dashboardData) => {
+    void loadDataWithRetry()
+      .then(() => {
         if (cancelled) return;
-        setData(dashboardData);
-        setError(null);
       })
       .catch((loadError) => {
         if (cancelled) return;
@@ -213,7 +264,15 @@ export function RoleDashboard({ role }: { role: AppRole }) {
         onRetry={() => {
           setLoading(true);
           setError(null);
-          void loadData().finally(() => setLoading(false));
+          void loadDataWithRetry()
+            .catch((loadError) => {
+              setError(
+                loadError instanceof Error
+                  ? loadError.message
+                  : "Failed to load dashboard.",
+              );
+            })
+            .finally(() => setLoading(false));
         }}
       />
     );

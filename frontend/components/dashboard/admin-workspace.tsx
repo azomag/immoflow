@@ -456,15 +456,40 @@ export function AdminWorkspace({
     setBusy(true);
     setError(null);
     setNotice(null);
+    let actionCompleted = false;
 
     try {
       await action();
+      actionCompleted = true;
       await reload();
     } catch (mutationError) {
+      if (actionCompleted) {
+        setNotice((current) => current ?? "Saved. Data refresh is taking longer, please refresh once.");
+        return;
+      }
+
       setError(mutationError instanceof Error ? mutationError.message : "Request failed.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetUserWizardState() {
+    setUserWizardStep(0);
+    setUserForm({
+      name: "",
+      email: "",
+      phone: "",
+      login: "",
+      role: role === "super_admin" ? "admin" : "agent",
+      status: "active",
+      code_agent: "",
+      niveau_acces: "admin",
+      date_naissance: "",
+      adresse: "",
+      password: "",
+      password_confirmation: "",
+    });
   }
 
   function resetPropertyEditor() {
@@ -525,11 +550,8 @@ export function AdminWorkspace({
 
   function openUserWizard() {
     setActiveTab("users");
-    setUserWizardStep(0);
-    setUserForm((current) => ({
-      ...current,
-      role: role === "super_admin" ? "admin" : "agent",
-    }));
+    resetUserWizardState();
+    setError(null);
     setUserWizardOpen(true);
     setSidebarOpen(false);
   }
@@ -819,20 +841,8 @@ export function AdminWorkspace({
         }),
       }, token);
 
-      setUserForm((current) => ({
-        ...current,
-        name: "",
-        email: "",
-        phone: "",
-        login: "",
-        code_agent: "",
-        date_naissance: "",
-        adresse: "",
-        password: "",
-        password_confirmation: "",
-      }));
+      resetUserWizardState();
       setUserWizardOpen(false);
-      setUserWizardStep(0);
       setNotice("User created.");
     });
   }
@@ -1174,41 +1184,43 @@ export function AdminWorkspace({
                       </button>
                     </div>
 
-                    <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
-                      <div className="grid grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                        <div>Ref</div>
-                        <div>Property Name</div>
-                        <div>Status</div>
-                        <div>Next Visit</div>
-                      </div>
+                    <div className="overflow-x-auto rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+                      <div className="min-w-[760px]">
+                        <div className="grid grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                          <div>Ref</div>
+                          <div>Property Name</div>
+                          <div>Status</div>
+                          <div>Next Visit</div>
+                        </div>
 
-                      {propertySnapshots.slice(0, 4).map((property) => (
-                        <button
-                          key={property.logement.id}
-                          type="button"
-                          onClick={() => openPropertyDetail(property.logement.id)}
-                          className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
-                        >
-                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
-                              {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
-                              <div className="text-xs text-[var(--muted-foreground)]">
-                                {property.tenantName ?? property.logement.commune.nom}
+                        {propertySnapshots.slice(0, 4).map((property) => (
+                          <button
+                            key={property.logement.id}
+                            type="button"
+                            onClick={() => openPropertyDetail(property.logement.id)}
+                            className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_180px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
+                          >
+                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
+                                {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
+                                <div className="text-xs text-[var(--muted-foreground)]">
+                                  {property.tenantName ?? property.logement.commune.nom}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="self-center">
-                            <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
-                          </div>
-                          <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
-                            {formatShortDate(property.nextEventDate)}
-                          </div>
-                        </button>
-                      ))}
+                            <div className="self-center">
+                              <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
+                            </div>
+                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
+                              {formatShortDate(property.nextEventDate)}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -1297,24 +1309,25 @@ export function AdminWorkspace({
                 </div>
 
                 <div className="grid gap-6">
-                  <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                    <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                      <div>Ref</div>
-                      <div>Property</div>
-                      <div>Type</div>
-                      <div>Area</div>
-                      <div>Rent</div>
-                      <div>Status</div>
-                      <div>Agent</div>
-                      <div />
-                    </div>
+                  <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                    <div className="min-w-[1140px]">
+                      <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                        <div>Ref</div>
+                        <div>Property</div>
+                        <div>Type</div>
+                        <div>Area</div>
+                        <div>Rent</div>
+                        <div>Status</div>
+                        <div>Agent</div>
+                        <div />
+                      </div>
 
-                    {filteredProperties.map((property) => (
-                      <div
-                        key={property.logement.id}
-                        onClick={() => openPropertyDetail(property.logement.id)}
-                        className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
-                      >
+                      {filteredProperties.map((property) => (
+                        <div
+                          key={property.logement.id}
+                          onClick={() => openPropertyDetail(property.logement.id)}
+                          className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
+                        >
                         <div className="self-center text-[15px] text-black/60">{property.ref}</div>
                         <div className="min-w-0">
                           <div className="truncate text-[17px] font-semibold">{property.logement.adresse}</div>
@@ -1376,8 +1389,9 @@ export function AdminWorkspace({
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <Dialog open={propertyPanelOpen} onOpenChange={setPropertyPanelOpen}>
@@ -2181,21 +2195,22 @@ export function AdminWorkspace({
                   </Button>
                 </div>
 
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>Ref</div>
-                    <div>Tenant</div>
-                    <div>Property</div>
-                    <div>Start</div>
-                    <div>End</div>
-                    <div>Rent</div>
-                    <div />
-                  </div>
-                  {contrats.map((contrat) => (
-                    <div
-                      key={contrat.id}
-                      className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 border-t border-black/6 px-7 py-4"
-                    >
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[1080px]">
+                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Ref</div>
+                      <div>Tenant</div>
+                      <div>Property</div>
+                      <div>Start</div>
+                      <div>End</div>
+                      <div>Rent</div>
+                      <div />
+                    </div>
+                    {contrats.map((contrat) => (
+                      <div
+                        key={contrat.id}
+                        className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
                       <div className="self-center font-mono text-sm text-black/60">CTR-{String(contrat.id).padStart(4, "0")}</div>
                       <div className="self-center">
                         <div className="flex items-center gap-2.5">
@@ -2237,8 +2252,9 @@ export function AdminWorkspace({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2302,7 +2318,8 @@ export function AdminWorkspace({
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[920px]">
                     <div className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
                       <div>Tenant</div>
                       <div>Property</div>
@@ -2324,6 +2341,7 @@ export function AdminWorkspace({
                         </div>
                       </div>
                     ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2335,20 +2353,21 @@ export function AdminWorkspace({
                   <p className="mt-2 text-black/55">Live locataire records linked to active contracts.</p>
                 </div>
 
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_150px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>Tenant</div>
-                    <div>Email</div>
-                    <div>Residence</div>
-                    <div>Rent</div>
-                    <div>Status</div>
-                  </div>
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[980px]">
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_150px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Tenant</div>
+                      <div>Email</div>
+                      <div>Residence</div>
+                      <div>Rent</div>
+                      <div>Status</div>
+                    </div>
 
-                  {tenantRows.map((row) => (
-                    <div
-                      key={row.user.id}
-                      className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_150px_140px] gap-4 border-t border-black/6 px-7 py-4"
-                    >
+                    {tenantRows.map((row) => (
+                      <div
+                        key={row.user.id}
+                        className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_150px_140px] gap-4 border-t border-black/6 px-7 py-4"
+                      >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-11 w-11">
                           <AvatarImage src={row.user.avatar_url ?? undefined} alt={row.user.name} />
@@ -2367,8 +2386,9 @@ export function AdminWorkspace({
                       <div className="self-center">
                         <Badge variant={toneForStatus(row.user.status)}>{row.user.status}</Badge>
                       </div>
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2437,17 +2457,18 @@ export function AdminWorkspace({
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-[24px] border border-black/6 bg-white">
-                  <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_170px_120px_150px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>Name + Avatar</div>
-                    <div>Email</div>
-                    <div>Phone</div>
-                    <div>Records</div>
-                    <div>Status</div>
-                    <div>Actions</div>
-                  </div>
+                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+                  <div className="min-w-[1120px]">
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_170px_120px_150px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                      <div>Name + Avatar</div>
+                      <div>Email</div>
+                      <div>Phone</div>
+                      <div>Records</div>
+                      <div>Status</div>
+                      <div>Actions</div>
+                    </div>
 
-                  {visibleUsers.map((entry) => {
+                    {visibleUsers.map((entry) => {
                     const recordCount =
                       entry.role === "agent"
                         ? logements.filter((logement) => logement.agent.user.id === entry.id).length
@@ -2496,6 +2517,7 @@ export function AdminWorkspace({
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2505,8 +2527,6 @@ export function AdminWorkspace({
                 token={token}
                 user={user}
                 users={users}
-                notifications={notifications}
-                reload={reload}
               />
             ) : null}
 
@@ -3213,7 +3233,15 @@ export function AdminWorkspace({
               </DialogContent>
             </Dialog>
 
-            <Dialog open={userWizardOpen} onOpenChange={setUserWizardOpen}>
+            <Dialog
+              open={userWizardOpen}
+              onOpenChange={(open) => {
+                setUserWizardOpen(open);
+                if (!open) {
+                  resetUserWizardState();
+                }
+              }}
+            >
               <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[760px]">
                 <DialogHeader className="border-b border-black/8 px-6 py-4">
                   <DialogTitle className="flex items-center gap-3 text-[22px]">

@@ -7,6 +7,48 @@ const isGoogleAuthEnabled = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
 );
 
+const AUTH_RETRY_DELAYS_MS = [1200, 2200, 3600];
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableAuthError(error: unknown): boolean {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      return status >= 500 || status === 429;
+    }
+  }
+  return true;
+}
+
+async function loginWithRetry(identifier: string, password: string): Promise<AuthResponse> {
+  let lastError: unknown = null;
+  const maxAttempts = AUTH_RETRY_DELAYS_MS.length + 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await backendRequest<AuthResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
+      });
+    } catch (error) {
+      lastError = error;
+      const hasMoreAttempts = attempt < maxAttempts - 1;
+      if (!hasMoreAttempts || !isRetryableAuthError(error)) {
+        throw error;
+      }
+      await wait(AUTH_RETRY_DELAYS_MS[attempt] ?? 1000);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Authentication failed.");
+}
+
 export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
@@ -29,13 +71,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email or username and password are required.");
         }
 
-        const response = await backendRequest<AuthResponse>("/api/auth/login", {
-          method: "POST",
-          body: JSON.stringify({
-            identifier: credentials.identifier,
-            password: credentials.password,
-          }),
-        });
+        const response = await loginWithRetry(credentials.identifier, credentials.password);
 
         return {
           id: String(response.user.id),

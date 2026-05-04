@@ -13,7 +13,6 @@ import {
   Globe,
   Image as ImageIcon,
   ShieldCheck,
-  Sparkles,
   UserRound,
   KeyRound,
   Mail,
@@ -55,15 +54,6 @@ const choices: Array<{
     icon: ShieldCheck,
     iconClass: "bg-[linear-gradient(135deg,#111827_0%,#000000_100%)] text-white",
   },
-];
-
-const decorativeFeatures = [
-  "Role-based dashboards",
-  "Google OAuth + credentials",
-  "Real-time contract signing",
-  "Automated PDF generation",
-  "Admin approval workflows",
-  "End-to-end data sync",
 ];
 
 export function AuthCard({ mode }: { mode: "login" | "signup" }) {
@@ -126,12 +116,45 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
     return `${form.first_name} ${form.last_name}`.trim();
   }
 
-  function normalizeAuthError(value: string) {
+function normalizeAuthError(value: string) {
     try {
       return decodeURIComponent(value);
     } catch {
       return value;
     }
+  }
+
+  async function signInWithRetry(identifier: string, password: string) {
+    let lastError: string | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const result = await signIn("credentials", {
+        identifier,
+        password,
+        redirect: false,
+      });
+
+      if (!result?.error) {
+        return true;
+      }
+
+      lastError = normalizeAuthError(result.error);
+      const retryable =
+        /fetch|network|timeout|server|failed/i.test(lastError);
+      if (!retryable || attempt === 2) {
+        throw new Error(lastError);
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, attempt === 0 ? 1200 : 2200),
+      );
+    }
+
+    if (lastError) {
+      throw new Error(lastError);
+    }
+
+    return false;
   }
 
   function resetMessages() {
@@ -171,20 +194,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
     try {
       if (loginMode) {
         setPending(true);
-        const result = await signIn("credentials", {
-          identifier: form.identifier,
-          password: form.password,
-          redirect: false,
-        });
-
-        if (result?.error) {
-          const normalizedError = normalizeAuthError(result.error);
-          if (normalizedError.toLowerCase().includes("awaiting approval")) {
-            router.push("/pending");
-            return;
-          }
-          throw new Error(normalizedError);
-        }
+        await signInWithRetry(form.identifier, form.password);
 
         router.push("/dashboard");
         router.refresh();
@@ -227,17 +237,19 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
         return;
       }
 
-      const result = await signIn("credentials", {
-        identifier: form.login.trim() || form.email,
-        password: form.password,
-        redirect: false,
-      });
-
-      if (result?.error) throw new Error(normalizeAuthError(result.error));
+      await signInWithRetry(form.login.trim() || form.email, form.password);
 
       router.push("/dashboard");
       router.refresh();
     } catch (submissionError) {
+      if (
+        submissionError instanceof Error &&
+        submissionError.message.toLowerCase().includes("awaiting approval")
+      ) {
+        router.push("/pending");
+        return;
+      }
+
       setError(
         submissionError instanceof Error
           ? submissionError.message
@@ -265,52 +277,15 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <div className="flex min-h-screen">
-      {/* ── Left Decorative Panel ── */}
-      <div className="hidden lg:flex lg:w-[44%] flex-col justify-between bg-[#eaf6fb] p-10 xl:p-14">
-        {/* Logo */}
-        <div className="flex items-center">
-          <div className="flex h-30 w-30 items-center justify-center overflow-hidden ">
-            <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" priority />
-          </div>
-        </div>
-
-        {/* Hero copy */}
-        <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/85 px-4 py-1.5 text-sm font-medium text-black/70">
-            <Sparkles className="h-3.5 w-3.5 text-[var(--secondary)]" />
-            Real Estate Management Platform
-          </div>
-          <h2 className="text-4xl font-bold leading-tight text-black xl:text-5xl">
-            Manage every
-            <br />
-            <span className="text-[#01497c]">property workflow</span>
-            <br />
-            in one place.
-          </h2>
-          <p className="mt-5 text-base leading-7 text-black/60">
-            Bring together admins, agents, and tenants under a unified platform
-            with real-time data, role-based access, and automated workflows.
-          </p>
-
-          {/* Feature list */}
-          <div className="mt-8 grid grid-cols-2 gap-3">
-            {decorativeFeatures.map((f) => (
-              <div key={f} className="flex items-center gap-2 text-sm text-black/60">
-                <div className="h-1.5 w-1.5 rounded-full bg-[#01497c]" />
-                {f}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom quote */}
-        <div className="rounded-2xl border border-black/10 bg-white/55 p-5">
-          <p className="text-sm leading-6 text-black/60">
-            "Google sign-in syncs the authenticated profile into the Laravel
-            user table, then the frontend loads the exact role and permissions
-            assigned there."
-          </p>
-        </div>
+      {/* ── Left Visual Panel ── */}
+      <div className="relative hidden lg:block lg:w-[44%] overflow-hidden bg-[#dfeff7]">
+        <Image
+          src="/assets/profile/logo/logo_immoflow.png"
+          alt="ImmoFlow"
+          fill
+          priority
+          className="object-contain p-16 xl:p-24"
+        />
       </div>
 
       {/* ── Right Form Panel ── */}

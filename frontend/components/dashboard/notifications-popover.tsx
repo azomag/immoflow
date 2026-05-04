@@ -69,12 +69,9 @@ export function NotificationsPopover({
         <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 ? (
-            <>
-              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-[var(--danger)] px-1 text-[10px] font-semibold leading-4 text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--danger)] border-2 border-white" />
-            </>
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-[var(--danger)] px-1 text-[10px] font-semibold leading-4 text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
           ) : null}
         </button>
       </DropdownMenuTrigger>

@@ -165,6 +165,21 @@ export type ConversationRecord = {
 };
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const API_RETRY_DELAYS_MS = [1200, 2200, 3600, 5200, 7600];
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function isSafeMethod(method?: string) {
+  if (!method) return true;
+  const upper = method.toUpperCase();
+  return upper === "GET" || upper === "HEAD" || upper === "OPTIONS";
+}
 
 export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -172,6 +187,32 @@ export function getApiBaseUrl(): string {
 
 async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
+}
+
+function extractBackendErrorMessage(errorBody: unknown, fallback: string): string {
+  if (errorBody && typeof errorBody === "object") {
+    const payload = errorBody as {
+      message?: unknown;
+      errors?: Record<string, unknown>;
+    };
+
+    if (typeof payload.message === "string" && payload.message.trim()) {
+      return payload.message;
+    }
+
+    if (payload.errors && typeof payload.errors === "object") {
+      for (const value of Object.values(payload.errors)) {
+        if (Array.isArray(value) && typeof value[0] === "string" && value[0].trim()) {
+          return value[0];
+        }
+        if (typeof value === "string" && value.trim()) {
+          return value;
+        }
+      }
+    }
+  }
+
+  return fallback;
 }
 
 export async function backendRequest<T>(
@@ -191,18 +232,52 @@ export async function backendRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+  const requestInit: RequestInit = {
     ...init,
     headers,
     cache: "no-store",
-  });
+  };
+
+  const canRetry = isSafeMethod(requestInit.method);
+  const maxAttempts = canRetry ? API_RETRY_DELAYS_MS.length + 1 : 1;
+  let response: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      response = await fetch(`${getApiBaseUrl()}${path}`, requestInit);
+    } catch (fetchError) {
+      lastError = fetchError;
+      const hasMoreAttempts = attempt < maxAttempts - 1;
+      if (!canRetry || !hasMoreAttempts) {
+        throw fetchError instanceof Error ? fetchError : new Error("Failed to fetch");
+      }
+      await wait(API_RETRY_DELAYS_MS[attempt] ?? 1000);
+      continue;
+    }
+
+    if (response.ok) {
+      break;
+    }
+
+    const hasMoreAttempts = attempt < maxAttempts - 1;
+    if (!canRetry || !hasMoreAttempts || !isRetryableStatus(response.status)) {
+      break;
+    }
+
+    await wait(API_RETRY_DELAYS_MS[attempt] ?? 1000);
+  }
+
+  if (!response) {
+    throw lastError instanceof Error ? lastError : new Error("Failed to fetch");
+  }
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    const message =
-      errorBody && typeof errorBody.message === "string"
-        ? errorBody.message
-        : `Backend request failed with status ${response.status}`;
+    const message = extractBackendErrorMessage(
+      errorBody,
+      `Backend request failed with status ${response.status}`,
+    );
 
     throw Object.assign(new Error(message), {
       status: response.status,

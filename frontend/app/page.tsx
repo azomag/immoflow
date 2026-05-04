@@ -65,7 +65,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.35)]">
-              <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={40} height={40} className="h-full w-full object-cover" priority />
+              <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={40} height={40} className="h-full w-full object-contain" priority />
             </div>
           </div>
           <nav className="flex items-center gap-3">

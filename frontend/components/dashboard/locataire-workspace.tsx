@@ -293,7 +293,7 @@ export function LocataireWorkspace({
           <div className="flex items-center gap-10">
             <div className="flex items-center gap-3">
                <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
-                                <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
+                                <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                               </div>
             </div>
 
@@ -322,7 +322,6 @@ export function LocataireWorkspace({
               token={token}
               userId={user.id}
               notifications={notifications}
-              onOpenMessages={() => setActiveTab("notifications")}
             />
             <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
               <CircleHelp className="h-4 w-4" />

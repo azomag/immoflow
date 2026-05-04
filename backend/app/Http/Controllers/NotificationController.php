@@ -90,6 +90,24 @@ class NotificationController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, Notification $notification): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if ($notification->sender_id !== $user->id && $notification->recipient_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only delete your own notifications.',
+            ], 403);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'message' => 'Notification deleted.',
+        ]);
+    }
+
     private function canMessage(User $sender, User $recipient): bool
     {
         return match ($sender->role) {

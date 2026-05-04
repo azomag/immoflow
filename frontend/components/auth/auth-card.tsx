@@ -280,7 +280,7 @@ function normalizeAuthError(value: string) {
       {/* ── Left Visual Panel ── */}
       <div className="relative hidden lg:block lg:w-[44%] overflow-hidden bg-[#dfeff7]">
         <Image
-          src="/assets/profile/logo/logo_immoflow.png"
+          src="/assets/profile/logo/immoflow-logo.png"
           alt="ImmoFlow"
           fill
           priority
@@ -293,7 +293,7 @@ function normalizeAuthError(value: string) {
         {/* Mobile logo */}
         <div className="mb-8 flex items-center lg:hidden">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.25)]">
-            <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={36} height={36} className="h-full w-full object-cover" />
+            <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={36} height={36} className="h-full w-full object-contain" />
           </div>
         </div>
 

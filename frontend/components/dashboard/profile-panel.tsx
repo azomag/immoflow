@@ -125,7 +125,7 @@ export function ProfilePanel({
   }
 
   return (
-    <section className="max-w-5xl space-y-8">
+    <section className="w-full space-y-8">
       {/* Page title */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Profile Settings</h1>

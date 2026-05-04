@@ -8,7 +8,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SSL_CA_PATH="/tmp/aiven-ca.pem"
 
 if [[ -n "${DB_SSL_CA_CONTENT:-}" ]]; then
-  printf "%s\n" "${DB_SSL_CA_CONTENT}" | tr -d '\r' > "${SSL_CA_PATH}"
+  CERT_CONTENT="${DB_SSL_CA_CONTENT}"
+  # Support values pasted with surrounding quotes and escaped newlines (\n).
+  CERT_CONTENT="${CERT_CONTENT%\"}"
+  CERT_CONTENT="${CERT_CONTENT#\"}"
+  printf "%b\n" "${CERT_CONTENT}" | tr -d '\r' > "${SSL_CA_PATH}"
   chmod 600 "${SSL_CA_PATH}"
   export MYSQL_ATTR_SSL_CA="${SSL_CA_PATH}"
 elif [[ -n "${DB_SSL_CA_BASE64:-}" ]]; then

@@ -145,8 +145,8 @@ export function NotificationsPanel({
     : selectedRecipient;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow)]" style={{ minHeight: 680 }}>
-      <div className="grid h-full lg:grid-cols-[320px_minmax(0,1fr)]">
+    <div className="w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow)] min-h-[calc(100vh-220px)]">
+      <div className="grid h-full lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* ── Sidebar ── */}
         <aside className="flex flex-col border-r border-[var(--border)] bg-[#f8f7f5]">
           {/* Header */}
@@ -252,13 +252,18 @@ export function NotificationsPanel({
               <SelectTrigger className="h-10 rounded-xl border-[var(--border)] bg-white text-sm">
                 <SelectValue placeholder="Choose a contact…" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl">
+              <SelectContent
+                className="max-h-72 w-[var(--radix-select-trigger-width)] rounded-xl"
+                position="popper"
+              >
                 {recipients.map((r) => (
-                  <SelectItem key={r.id} value={String(r.id)} className="rounded-lg">
-                    <span className="font-medium">{r.name}</span>
-                    <span className="ml-2 text-xs text-[var(--muted-foreground)]">
-                      · {r.role.replace("_", " ")}
-                    </span>
+                  <SelectItem key={r.id} value={String(r.id)} className="rounded-lg py-2">
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span className="truncate font-medium">{r.name}</span>
+                      <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
+                        {r.role.replace("_", " ")}
+                      </span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

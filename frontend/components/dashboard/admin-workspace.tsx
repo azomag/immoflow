@@ -5,7 +5,7 @@ import Image from "next/image";
 import { signOut } from "next-auth/react";
 import {
   Bath,
-  Bell,
+  MessageSquare,
   Building2,
   CarFront,
   CalendarDays,
@@ -37,6 +37,9 @@ import {
   Trash2,
   X,
   BedDouble,
+  Check,
+  Clock3,
+  Ban,
 } from "lucide-react";
 import { gsap } from "gsap";
 import type {
@@ -149,8 +152,6 @@ export function AdminWorkspace({
   const [userWizardStep, setUserWizardStep] = useState(0);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
-  const [communeFilter, setCommuneFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
   const [userView, setUserView] = useState<UserView>(role === "super_admin" ? "admins" : "agents");
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<number | null>(null);
@@ -235,15 +236,13 @@ export function AdminWorkspace({
     return ["All", ...new Set(logements.map((entry) => entry.type_logement.nom_type))];
   }, [logements]);
 
-  const filteredProperties = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const normalizedSearch = search.trim().toLowerCase();
 
+  const filteredProperties = useMemo(() => {
     return propertySnapshots.filter((snapshot) => {
       const typeMatch = typeFilter === "All" || snapshot.logement.type_logement.nom_type === typeFilter;
-      const communeMatch = communeFilter === "All" || snapshot.logement.commune.nom === communeFilter;
-      const statusMatch = statusFilter === "All" || snapshot.status === statusFilter;
       const searchMatch =
-        query.length === 0 ||
+        normalizedSearch.length === 0 ||
         [
           snapshot.ref,
           snapshot.logement.adresse,
@@ -254,11 +253,11 @@ export function AdminWorkspace({
         ]
           .join(" ")
           .toLowerCase()
-          .includes(query);
+          .includes(normalizedSearch);
 
-      return typeMatch && communeMatch && statusMatch && searchMatch;
+      return typeMatch && searchMatch;
     });
-  }, [communeFilter, propertySnapshots, search, statusFilter, typeFilter]);
+  }, [normalizedSearch, propertySnapshots, typeFilter]);
 
   const selectedProperty =
     propertySnapshots.find((snapshot) => snapshot.logement.id === selectedPropertyId) ?? null;
@@ -346,15 +345,14 @@ export function AdminWorkspace({
           ? agentUsers
           : tenantUsers;
 
-    const query = search.trim().toLowerCase();
-    if (!query) {
+    if (!normalizedSearch) {
       return pool;
     }
 
     return pool.filter((entry) =>
-      [entry.name, entry.email, entry.phone ?? "", entry.role].join(" ").toLowerCase().includes(query),
+      [entry.name, entry.email, entry.phone ?? "", entry.role].join(" ").toLowerCase().includes(normalizedSearch),
     );
-  }, [adminUsers, agentUsers, search, tenantUsers, userView]);
+  }, [adminUsers, agentUsers, normalizedSearch, tenantUsers, userView]);
 
   const tenantRows = useMemo(() => {
     return tenantUsers.map((tenant) => {
@@ -372,6 +370,75 @@ export function AdminWorkspace({
       };
     });
   }, [contrats, tenantUsers]);
+
+  const filteredContracts = useMemo(() => {
+    if (!normalizedSearch) {
+      return contrats;
+    }
+
+    return contrats.filter((contrat) =>
+      [
+        contrat.id,
+        contrat.locataire.user.name,
+        contrat.locataire.user.email,
+        contrat.logement.adresse,
+        contrat.statut,
+        contrat.signature_status,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [contrats, normalizedSearch]);
+
+  const filteredPayments = useMemo(() => {
+    if (!normalizedSearch) {
+      return paiements;
+    }
+
+    return paiements.filter((paiement) =>
+      [
+        paiement.id,
+        paiement.contrat.locataire.user.name,
+        paiement.contrat.logement.adresse,
+        paiement.mode,
+        paiement.statut,
+        paiement.montant,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [normalizedSearch, paiements]);
+
+  const filteredTenantRows = useMemo(() => {
+    if (!normalizedSearch) {
+      return tenantRows;
+    }
+
+    return tenantRows.filter((row) =>
+      [
+        row.user.name,
+        row.user.email,
+        row.user.phone ?? "",
+        row.residence,
+        row.rent ?? "",
+        row.user.status,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [normalizedSearch, tenantRows]);
+
+  const searchPlaceholder = useMemo(() => {
+    if (activeTab === "properties") return "Search properties by ref, address, tenant...";
+    if (activeTab === "contracts") return "Search contracts by tenant, property, status...";
+    if (activeTab === "payments") return "Search payments by tenant, amount, mode...";
+    if (activeTab === "tenants") return "Search tenants by name, email, phone...";
+    if (activeTab === "users") return "Search users by name, role, email...";
+    return "Search by reference, name or tenant...";
+  }, [activeTab]);
 
   const contractPropertyOptions = useMemo(() => {
     if (!contractForm.locataire_id) {
@@ -934,26 +1001,10 @@ export function AdminWorkspace({
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "tenants", label: "Tenants", icon: Users },
     { id: "users", label: "User Management", icon: UserCog },
-    { id: "notifications", label: "Messages", icon: Bell },
+    { id: "notifications", label: "Messages", icon: MessageSquare },
     { id: "profile", label: "Profile", icon: UserCog },
     { id: "settings", label: "Settings", icon: Settings },
   ];
-
-  function statusActionClass(status: string, isActive: boolean): string {
-    if (status === "active") {
-      return isActive
-        ? "bg-emerald-600 text-white"
-        : "bg-emerald-50 text-emerald-700";
-    }
-    if (status === "pending") {
-      return isActive
-        ? "bg-amber-500 text-white"
-        : "bg-amber-50 text-amber-700";
-    }
-    return isActive
-      ? "bg-red-600 text-white"
-      : "bg-red-50 text-red-700";
-  }
 
   return (
     <div ref={workspaceRef} className="min-h-screen bg-[var(--background)]">
@@ -963,7 +1014,7 @@ export function AdminWorkspace({
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                  <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
-                                  <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
+                                  <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                                 </div>
               </div>
               <button type="button" className="hidden rounded-full p-2 text-[var(--sidebar-text)]/70 transition hover:bg-[var(--sidebar-hover-bg)] lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
@@ -1070,11 +1121,7 @@ export function AdminWorkspace({
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder={
-                    activeTab === "users"
-                      ? "Search users or roles..."
-                      : "Search by reference, name or tenant..."
-                  }
+                  placeholder={searchPlaceholder}
                   className="h-12 rounded-2xl border-[var(--border)] bg-white pl-12 shadow-[var(--shadow-sm)] focus-visible:ring-[var(--ring)]"
                 />
               </div>
@@ -1085,7 +1132,6 @@ export function AdminWorkspace({
                 token={token}
                 userId={user.id}
                 notifications={notifications}
-                onOpenMessages={() => openTab("notifications")}
               />
               <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
                 <CircleHelp className="h-4 w-4" />
@@ -1282,30 +1328,6 @@ export function AdminWorkspace({
                     </button>
                   ))}
 
-                  <div className="ml-auto flex flex-wrap items-center gap-3">
-                    <select
-                      className="h-11 rounded-2xl border border-black/8 bg-white px-4 text-sm"
-                      value={communeFilter}
-                      onChange={(event) => setCommuneFilter(event.target.value)}
-                    >
-                      <option value="All">Commune</option>
-                      {communes.map((entry) => (
-                        <option key={entry.id} value={entry.nom}>
-                          {entry.nom}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="h-11 rounded-2xl border border-black/8 bg-white px-4 text-sm"
-                      value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
-                    >
-                      <option value="All">Status</option>
-                      <option value="Available">Available</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Occupied">Occupied</option>
-                    </select>
-                  </div>
                 </div>
 
                 <div className="grid gap-6">
@@ -2206,7 +2228,7 @@ export function AdminWorkspace({
                       <div>Rent</div>
                       <div />
                     </div>
-                    {contrats.map((contrat) => (
+                    {filteredContracts.map((contrat) => (
                       <div
                         key={contrat.id}
                         className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_130px_56px] gap-4 border-t border-black/6 px-7 py-4"
@@ -2275,7 +2297,7 @@ export function AdminWorkspace({
                           "payments.csv",
                           ["Tenant,Property,Amount,Date,Mode,Status"]
                             .concat(
-                              paiements.map((paiement) =>
+                              filteredPayments.map((paiement) =>
                                 [
                                   paiement.contrat.locataire.user.name,
                                   paiement.contrat.logement.adresse,
@@ -2327,7 +2349,7 @@ export function AdminWorkspace({
                       <div>Date</div>
                       <div>Status</div>
                     </div>
-                    {paiements.map((paiement) => (
+                    {filteredPayments.map((paiement) => (
                       <div
                         key={paiement.id}
                         className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
@@ -2363,7 +2385,7 @@ export function AdminWorkspace({
                       <div>Status</div>
                     </div>
 
-                    {tenantRows.map((row) => (
+                    {filteredTenantRows.map((row) => (
                       <div
                         key={row.user.id}
                         className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_150px_140px] gap-4 border-t border-black/6 px-7 py-4"
@@ -2457,66 +2479,161 @@ export function AdminWorkspace({
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
-                  <div className="min-w-[1120px]">
-                    <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_170px_120px_150px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                      <div>Name + Avatar</div>
-                      <div>Email</div>
-                      <div>Phone</div>
-                      <div>Records</div>
-                      <div>Status</div>
-                      <div>Actions</div>
-                    </div>
+                <div className="space-y-4">
+                  <div className="hidden overflow-x-auto rounded-[24px] border border-black/6 bg-white lg:block">
+                    <div className="min-w-[1020px]">
+                      <div className="grid grid-cols-[minmax(0,1.4fr)_1fr_170px_120px_140px_150px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                        <div>Name + Avatar</div>
+                        <div>Email</div>
+                        <div>Phone</div>
+                        <div>Records</div>
+                        <div>Status</div>
+                        <div>Actions</div>
+                      </div>
 
-                    {visibleUsers.map((entry) => {
-                    const recordCount =
-                      entry.role === "agent"
-                        ? logements.filter((logement) => logement.agent.user.id === entry.id).length
-                        : entry.role === "locataire"
-                          ? contrats.filter((contrat) => contrat.locataire.user.id === entry.id).length
-                          : users.filter((candidate) => candidate.managed_by_id === entry.id).length;
+                      {visibleUsers.map((entry) => {
+                        const recordCount =
+                          entry.role === "agent"
+                            ? logements.filter((logement) => logement.agent.user.id === entry.id).length
+                            : entry.role === "locataire"
+                              ? contrats.filter((contrat) => contrat.locataire.user.id === entry.id).length
+                              : users.filter((candidate) => candidate.managed_by_id === entry.id).length;
 
-                    return (
-                      <div
-                        key={entry.id}
-                        className="grid grid-cols-[minmax(0,1.2fr)_1fr_170px_120px_150px_140px] gap-4 border-t border-black/6 px-7 py-5"
-                      >
-                        <div className="flex items-center gap-4">
-                          <Avatar className="h-12 w-12">
-                            <AvatarImage src={entry.avatar_url ?? undefined} alt={entry.name} />
-                            <AvatarFallback>{initials(entry.name)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="text-[18px] font-semibold">{entry.name}</div>
-                            <div className="text-sm uppercase tracking-[0.18em] text-black/40">
-                              {entry.role.replace("_", " ")}
+                        return (
+                          <div
+                            key={entry.id}
+                            className="grid grid-cols-[minmax(0,1.4fr)_1fr_170px_120px_140px_150px] gap-4 border-t border-black/6 px-7 py-5"
+                          >
+                            <div className="flex items-center gap-4">
+                              <Avatar className="h-11 w-11">
+                                <AvatarImage src={entry.avatar_url ?? undefined} alt={entry.name} />
+                                <AvatarFallback>{initials(entry.name)}</AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="truncate text-[17px] font-semibold">{entry.name}</div>
+                                <div className="text-sm uppercase tracking-[0.16em] text-black/40">
+                                  {entry.role.replace("_", " ")}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="self-center truncate text-[15px]">{entry.email}</div>
+                            <div className="self-center text-[15px]">{entry.phone ?? "No phone"}</div>
+                            <div className="self-center">
+                              <span className="rounded-xl bg-black/6 px-3 py-2 text-sm font-semibold">{recordCount}</span>
+                            </div>
+                            <div className="self-center">
+                              <Badge variant={toneForStatus(entry.status)}>{entry.status}</Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "active" ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
+                                    disabled={busy}
+                                    onClick={() => void handleStatusUpdate(entry.id, "active", entry.name)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Set Active</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "pending" ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                                    disabled={busy}
+                                    onClick={() => void handleStatusUpdate(entry.id, "pending", entry.name)}
+                                  >
+                                    <Clock3 className="h-4 w-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Set Pending</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "suspended" ? "border-red-600 bg-red-600 text-white" : "border-red-200 bg-red-50 text-red-700"}`}
+                                    disabled={busy}
+                                    onClick={() => void handleStatusUpdate(entry.id, "suspended", entry.name)}
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Set Suspended</TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
-                        </div>
-                        <div className="self-center text-[15px]">{entry.email}</div>
-                        <div className="self-center text-[15px]">{entry.phone ?? "No phone"}</div>
-                        <div className="self-center">
-                          <span className="rounded-xl bg-black/6 px-3 py-2 text-sm font-semibold">{recordCount}</span>
-                        </div>
-                        <div className="self-center">
-                          <Badge variant={toneForStatus(entry.status)}>{entry.status}</Badge>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {["active", "pending", "suspended"].map((status) => (
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:hidden">
+                    {visibleUsers.map((entry) => {
+                      const recordCount =
+                        entry.role === "agent"
+                          ? logements.filter((logement) => logement.agent.user.id === entry.id).length
+                          : entry.role === "locataire"
+                            ? contrats.filter((contrat) => contrat.locataire.user.id === entry.id).length
+                            : users.filter((candidate) => candidate.managed_by_id === entry.id).length;
+
+                      return (
+                        <div key={entry.id} className="rounded-2xl border border-[var(--border)] bg-white p-4">
+                          <div className="flex items-start gap-3">
+                            <Avatar className="h-11 w-11">
+                              <AvatarImage src={entry.avatar_url ?? undefined} alt={entry.name} />
+                              <AvatarFallback>{initials(entry.name)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-semibold text-[var(--foreground)]">{entry.name}</div>
+                              <div className="truncate text-sm text-[var(--muted-foreground)]">{entry.email}</div>
+                              <div className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
+                                {entry.role.replace("_", " ")}
+                              </div>
+                            </div>
+                            <Badge variant={toneForStatus(entry.status)}>{entry.status}</Badge>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between text-sm">
+                            <span className="text-[var(--muted-foreground)]">{entry.phone ?? "No phone"}</span>
+                            <span className="rounded-lg bg-black/6 px-2.5 py-1 text-xs font-semibold">
+                              {recordCount} records
+                            </span>
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
                             <button
-                              key={status}
                               type="button"
-                              className={`rounded-xl px-3 py-2 text-xs font-semibold ${statusActionClass(status, entry.status === status)}`}
+                              title="Set Active"
+                              className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "active" ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
                               disabled={busy}
-                              onClick={() => void handleStatusUpdate(entry.id, status, entry.name)}
+                              onClick={() => void handleStatusUpdate(entry.id, "active", entry.name)}
                             >
-                              {status}
+                              <Check className="h-4 w-4" />
                             </button>
-                          ))}
+                            <button
+                              type="button"
+                              title="Set Pending"
+                              className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "pending" ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                              disabled={busy}
+                              onClick={() => void handleStatusUpdate(entry.id, "pending", entry.name)}
+                            >
+                              <Clock3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Set Suspended"
+                              className={`flex h-9 w-9 items-center justify-center rounded-lg border ${entry.status === "suspended" ? "border-red-600 bg-red-600 text-white" : "border-red-200 bg-red-50 text-red-700"}`}
+                              disabled={busy}
+                              onClick={() => void handleStatusUpdate(entry.id, "suspended", entry.name)}
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   </div>
                 </div>
               </section>

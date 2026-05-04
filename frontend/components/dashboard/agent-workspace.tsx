@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 import {
   Bath,
   BedDouble,
-  Bell,
+  MessageSquare,
   Building2,
   CarFront,
   CalendarDays,
@@ -185,11 +185,11 @@ export function AgentWorkspace({
     [contrats, logements, paiements],
   );
 
-  const filteredProperties = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const normalizedSearch = search.trim().toLowerCase();
 
+  const filteredProperties = useMemo(() => {
     return propertySnapshots.filter((snapshot) => {
-      if (!query) {
+      if (!normalizedSearch) {
         return true;
       }
 
@@ -202,9 +202,9 @@ export function AgentWorkspace({
       ]
         .join(" ")
         .toLowerCase()
-        .includes(query);
+        .includes(normalizedSearch);
     });
-  }, [propertySnapshots, search]);
+  }, [normalizedSearch, propertySnapshots]);
 
   const selectedProperty =
     propertySnapshots.find((snapshot) => snapshot.logement.id === selectedPropertyId) ?? null;
@@ -259,6 +259,71 @@ export function AgentWorkspace({
     [contrats, paymentForm.contrat_id],
   );
   const totalPropertyImageCount = propertyExistingImages.length + propertyImageFiles.length;
+
+  const filteredContracts = useMemo(() => {
+    if (!normalizedSearch) {
+      return contrats;
+    }
+
+    return contrats.filter((contrat) =>
+      [
+        contrat.id,
+        contrat.locataire.user.name,
+        contrat.locataire.user.email,
+        contrat.logement.adresse,
+        contrat.statut,
+        contrat.signature_status,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [contrats, normalizedSearch]);
+
+  const filteredPayments = useMemo(() => {
+    if (!normalizedSearch) {
+      return paiements;
+    }
+
+    return paiements.filter((paiement) =>
+      [
+        paiement.id,
+        paiement.contrat.locataire.user.name,
+        paiement.contrat.logement.adresse,
+        paiement.mode,
+        paiement.statut,
+        paiement.montant,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [normalizedSearch, paiements]);
+
+  const filteredTenantUsers = useMemo(() => {
+    if (!normalizedSearch) {
+      return tenantUsers;
+    }
+
+    return tenantUsers.filter((entry) =>
+      [
+        entry.name,
+        entry.email,
+        entry.phone ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [normalizedSearch, tenantUsers]);
+
+  const searchPlaceholder = useMemo(() => {
+    if (activeTab === "properties") return "Search properties by ref, address or tenant...";
+    if (activeTab === "contracts") return "Search contracts by tenant, property or status...";
+    if (activeTab === "payments") return "Search payments by tenant, amount or mode...";
+    if (activeTab === "tenants") return "Search tenants by name, email or phone...";
+    return "Search by reference, address or tenant...";
+  }, [activeTab]);
 
   useEffect(() => {
     if (!notice && !error) {
@@ -733,7 +798,7 @@ export function AgentWorkspace({
     { id: "contracts", label: "Contracts", icon: FileText },
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "tenants", label: "Tenants", icon: Users },
-    { id: "notifications", label: "Messages", icon: Bell },
+    { id: "notifications", label: "Messages", icon: MessageSquare },
     { id: "profile", label: "Profile", icon: UserCog },
   ];
 
@@ -746,7 +811,7 @@ export function AgentWorkspace({
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="flex h-13 w-13 items-center justify-center overflow-hidden ">
-                  <Image src="/assets/profile/logo/logo_immoflow.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-cover" />
+                  <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                 </div>
               </div>
               <button type="button" className="hidden rounded-full p-2 text-[var(--sidebar-text)]/70 transition hover:bg-[var(--sidebar-hover-bg)] lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
@@ -853,7 +918,7 @@ export function AgentWorkspace({
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by reference, address or tenant..."
+                  placeholder={searchPlaceholder}
                   className="h-12 rounded-2xl border-[var(--border)] bg-white pl-12 shadow-[var(--shadow-sm)] focus-visible:ring-[var(--ring)]"
                 />
               </div>
@@ -864,7 +929,6 @@ export function AgentWorkspace({
                 token={token}
                 userId={user.id}
                 notifications={notifications}
-                onOpenMessages={() => openTab("notifications")}
               />
               <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
                 <CircleHelp className="h-4 w-4" />
@@ -1379,7 +1443,7 @@ export function AgentWorkspace({
                       <div>Sign</div>
                       <div />
                     </div>
-                    {contrats.map((contrat) => (
+                    {filteredContracts.map((contrat) => (
                       <div
                         key={contrat.id}
                         className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 border-t border-black/6 px-7 py-4"
@@ -1457,7 +1521,7 @@ export function AgentWorkspace({
                       <div>Date</div>
                       <div>Status</div>
                     </div>
-                    {paiements.map((paiement) => (
+                    {filteredPayments.map((paiement) => (
                       <div
                         key={paiement.id}
                         className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
@@ -1498,7 +1562,7 @@ export function AgentWorkspace({
                     <div>Contract</div>
                     <div>Receipts</div>
                   </div>
-                  {tenantUsers.map((entry) => {
+                  {filteredTenantUsers.map((entry) => {
                   const tenantContract =
                     contrats.find((contrat) => contrat.locataire.user.id === entry.id) ?? null;
 

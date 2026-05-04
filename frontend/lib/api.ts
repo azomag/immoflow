@@ -182,7 +182,18 @@ function isSafeMethod(method?: string) {
 }
 
 export function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  throw new Error(
+    "Missing NEXT_PUBLIC_API_BASE_URL in production. Set it in your frontend deployment environment.",
+  );
 }
 
 async function parseJson<T>(response: Response): Promise<T> {

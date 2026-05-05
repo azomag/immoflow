@@ -26,7 +26,6 @@ import {
   Menu,
   Plus,
   PencilLine,
-  ReceiptText,
   Ruler,
   Search,
   Share2,
@@ -70,7 +69,6 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildPropertySnapshot,
-  downloadTextFile,
   formatLongDate,
   formatMoney,
   formatShortDate,
@@ -145,6 +143,7 @@ export function AgentWorkspace({
   const [propertyImageViewer, setPropertyImageViewer] = useState<{ images: string[]; index: number } | null>(null);
   const [editingContractId, setEditingContractId] = useState<number | null>(null);
   const [contractDetails, setContractDetails] = useState<Contrat | null>(null);
+  const [tenantDetails, setTenantDetails] = useState<UserRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -258,6 +257,20 @@ export function AgentWorkspace({
     () => contrats.find((entry) => String(entry.id) === paymentForm.contrat_id) ?? null,
     [contrats, paymentForm.contrat_id],
   );
+
+  const tenantDetailsContract = useMemo(() => {
+    if (!tenantDetails) {
+      return null;
+    }
+    return contrats.find((entry) => entry.locataire.user.id === tenantDetails.id) ?? null;
+  }, [contrats, tenantDetails]);
+
+  const tenantDetailsPayments = useMemo(() => {
+    if (!tenantDetails) {
+      return [];
+    }
+    return paiements.filter((entry) => entry.contrat.locataire.user.id === tenantDetails.id);
+  }, [paiements, tenantDetails]);
   const totalPropertyImageCount = propertyExistingImages.length + propertyImageFiles.length;
 
   const filteredContracts = useMemo(() => {
@@ -438,6 +451,7 @@ export function AgentWorkspace({
     setActiveTab(tab);
     setSelectedPropertyId(null);
     setContractDetails(null);
+    setTenantDetails(null);
     setPropertyImageViewer(null);
     setSidebarOpen(false);
 
@@ -774,7 +788,7 @@ export function AgentWorkspace({
     const { default: Swal } = await import("sweetalert2");
     const result = await Swal.fire({
       title: "Delete property?",
-      text: "Properties with contracts cannot be deleted. Use draft for historical records.",
+      text: "This will permanently delete this property and all related contracts and payments.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Delete",
@@ -1560,7 +1574,7 @@ export function AgentWorkspace({
                     <div>Email</div>
                     <div>Active Property</div>
                     <div>Contract</div>
-                    <div>Receipts</div>
+                    <div>Actions</div>
                   </div>
                   {filteredTenantUsers.map((entry) => {
                   const tenantContract =
@@ -1588,28 +1602,33 @@ export function AgentWorkspace({
                           {tenantContract?.signature_status ?? "none"}
                         </Badge>
                       </div>
-                      <div className="self-center">
-                        <Button
-                          variant="outline"
-                          className="rounded-2xl"
-                          onClick={() => {
-                            const receipts = paiements.filter(
-                              (paiement) => paiement.contrat.locataire.user.id === entry.id,
-                            );
-                            downloadTextFile(
-                              `tenant-${entry.id}-receipts.txt`,
-                              receipts
-                                .map(
-                                  (receipt) =>
-                                    `${formatShortDate(receipt.date_paiement)} • ${formatMoney(receipt.montant)} MAD • ${receipt.statut}`,
-                                )
-                                .join("\n") || "No receipts",
-                            );
-                          }}
-                        >
-                          <ReceiptText className="h-4 w-4" />
-                          Export
-                        </Button>
+                      <div className="flex items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Tenant actions"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
+                            >
+                              <Ellipsis className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem className="text-gray-600" onClick={() => setTenantDetails(entry)}>
+                              <Eye className="h-4 w-4 text-gray-500" />
+                              Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-blue-700"
+                              onClick={() => {
+                                openTab("notifications");
+                              }}
+                            >
+                              <Mail className="h-4 w-4 text-blue-600" />
+                              Contact
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   );
@@ -1880,6 +1899,81 @@ export function AgentWorkspace({
                 >
                   <FileDown className="h-4 w-4" />
                   Download contract PDF
+                </Button>
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={Boolean(tenantDetails)} onOpenChange={(open) => !open && setTenantDetails(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[640px]">
+            <DialogHeader className="border-b border-black/8 px-6 py-4">
+              <DialogTitle className="text-[22px]">Tenant details</DialogTitle>
+            </DialogHeader>
+            {tenantDetails ? (
+              <div className="space-y-5 px-6 py-6">
+                <div className="rounded-2xl bg-[#f6f6f4] p-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={tenantDetails.avatar_url ?? undefined} alt={tenantDetails.name} />
+                      <AvatarFallback>{initials(tenantDetails.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-semibold">{tenantDetails.name}</div>
+                      <div className="text-sm text-black/50">{tenantDetails.email}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-black/8 bg-white p-4">
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Phone</span>
+                      <span className="font-semibold">{tenantDetails.phone ?? "No phone"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Role</span>
+                      <span className="font-semibold">{tenantDetails.role}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Status</span>
+                      <Badge variant={toneForStatus(tenantDetails.status)}>{tenantDetails.status}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Active property</span>
+                      <span className="font-semibold">{tenantDetailsContract?.logement.adresse ?? "None"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Contract signature</span>
+                      <Badge variant={toneForStatus(tenantDetailsContract?.signature_status ?? "pending")}>
+                        {tenantDetailsContract?.signature_status ?? "none"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50">Last login</span>
+                      <span className="font-semibold">{formatLongDate(tenantDetails.last_login_at, "Never")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-[#f6f6f4] p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Payments summary</div>
+                  <div className="mt-3 text-sm text-black/70">
+                    {tenantDetailsPayments.length} payment{tenantDetailsPayments.length === 1 ? "" : "s"} recorded
+                  </div>
+                  <div className="mt-1 text-sm font-semibold">
+                    Total: {formatMoney(tenantDetailsPayments.reduce((total, entry) => total + Number.parseFloat(entry.montant || "0"), 0))} MAD
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full rounded-2xl"
+                  onClick={() => {
+                    openTab("notifications");
+                  }}
+                >
+                  <Mail className="h-4 w-4" />
+                  Contact tenant
                 </Button>
               </div>
             ) : null}

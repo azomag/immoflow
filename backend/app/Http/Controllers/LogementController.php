@@ -9,6 +9,7 @@ use App\Support\DashboardNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class LogementController extends Controller
@@ -205,12 +206,6 @@ class LogementController extends Controller
             ], 403);
         }
 
-        if ($logement->contrats()->exists()) {
-            return response()->json([
-                'message' => 'This property has contracts attached. Move it to draft instead of deleting it.',
-            ], 422);
-        }
-
         $logement->loadMissing('agent');
         $agentUserId = $logement->agent?->user_id;
         $recipients = array_merge(
@@ -224,10 +219,21 @@ class LogementController extends Controller
             sprintf('%s deleted property "%s".', $user->name, $logement->adresse),
         );
 
-        $logement->delete();
+        DB::transaction(function () use ($logement): void {
+            $contractIds = $logement->contrats()->pluck('id');
+
+            if ($contractIds->isNotEmpty()) {
+                DB::table('paiements')
+                    ->whereIn('contrat_id', $contractIds->all())
+                    ->delete();
+            }
+
+            $logement->contrats()->delete();
+            $logement->delete();
+        });
 
         return response()->json([
-            'message' => 'Property deleted.',
+            'message' => 'Property and all related contracts/payments deleted.',
         ]);
     }
 

@@ -976,7 +976,7 @@ export function AdminWorkspace({
     const { default: Swal } = await import("sweetalert2");
     const result = await Swal.fire({
       title: "Delete property?",
-      text: "Properties with contracts cannot be deleted. Use draft for historical records.",
+      text: "This will permanently delete this property and all related contracts and payments.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Delete",
@@ -1013,7 +1013,7 @@ export function AdminWorkspace({
           <div className="space-y-1 px-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                 <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
+                 <div className="flex h-13 w-13 items-center justify-center overflow-hidden ">
                                   <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                                 </div>
               </div>

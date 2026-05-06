@@ -1513,9 +1513,8 @@ export function AgentWorkspace({
                       </div>
 
                       {filteredPayments.map((paiement) => {
-                        // FIX: Fetch agent directly from the contract relation, fallback to property agent
-                        const agentName = paiement.contrat?.agent?.user?.name || paiement.contrat?.logement?.agent?.user?.name || "Unassigned";
-                        const agentAvatar = paiement.contrat?.agent?.user?.avatar_url || paiement.contrat?.logement?.agent?.user?.avatar_url || undefined;
+                        const agentName = paiement.contrat?.agent?.user?.name || "Unassigned";
+                        const agentAvatar = paiement.contrat?.agent?.user?.avatar_url || undefined;
 
                         return (
                           <div

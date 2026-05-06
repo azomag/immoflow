@@ -1,21 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PRODUCTION_APP_BASE_URL = "https://immoflow-maroc.vercel.app";
+const FALLBACK_DASHBOARD_BASE_URL = "https://immoflow-gray.vercel.app";
+
+function normalizeBaseUrl(value: string) {
+  return value.trim().replace(/\/$/, "");
+}
 
 function getAppBaseUrl(request: NextRequest) {
-  if (process.env.NODE_ENV === "development") {
-    const configured =
-      process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
-    if (configured) {
-      return configured.replace(/\/$/, "");
-    }
+  const dashboardUrl =
+    process.env.DASHBOARD_BASE_URL?.trim() || process.env.NEXT_PUBLIC_DASHBOARD_URL?.trim();
+  if (dashboardUrl) {
+    return normalizeBaseUrl(dashboardUrl);
+  }
 
+  const appUrl =
+    process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
+  if (appUrl) {
+    return normalizeBaseUrl(appUrl);
+  }
+
+  if (process.env.NODE_ENV === "development") {
     const host = request.headers.get("host") ?? "127.0.0.1:3000";
     const hostname = host.split(":")[0] || "127.0.0.1";
     return `http://${hostname}:3001`;
   }
 
-  return PRODUCTION_APP_BASE_URL;
+  return FALLBACK_DASHBOARD_BASE_URL;
 }
 
 export async function GET(request: NextRequest) {

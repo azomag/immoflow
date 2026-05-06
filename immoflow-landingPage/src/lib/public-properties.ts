@@ -119,7 +119,18 @@ export const fallbackPublicProperties: PublicProperty[] = [
 ];
 
 export function getLandingApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  throw new Error(
+    "Missing NEXT_PUBLIC_API_BASE_URL in production. Set it to your Railway backend URL.",
+  );
 }
 
 export function getPropertyImages(property: PublicProperty) {

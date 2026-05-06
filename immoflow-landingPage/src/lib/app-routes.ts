@@ -21,19 +21,28 @@ export type LandingSession = {
   expires?: string;
 };
 
-const PRODUCTION_APP_BASE_URL = "https://immoflow-maroc.vercel.app";
+const FALLBACK_DASHBOARD_BASE_URL = "https://immoflow-gray.vercel.app";
+
+function normalizeBaseUrl(value: string) {
+  return value.trim().replace(/\/$/, "");
+}
 
 export function getAppBaseUrl() {
-  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    const configured = process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
-    if (configured) {
-      return configured.replace(/\/$/, "");
-    }
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL?.trim();
+  if (dashboardUrl) {
+    return normalizeBaseUrl(dashboardUrl);
+  }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
+  if (appUrl) {
+    return normalizeBaseUrl(appUrl);
+  }
+
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     return `${window.location.protocol}//${window.location.hostname}:3001`;
   }
 
-  return PRODUCTION_APP_BASE_URL;
+  return FALLBACK_DASHBOARD_BASE_URL;
 }
 
 export function getLoginUrl() {

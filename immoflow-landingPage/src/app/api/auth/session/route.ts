@@ -3,14 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 const PRODUCTION_APP_BASE_URL = "https://immoflow-maroc.vercel.app";
 
 function getAppBaseUrl(request: NextRequest) {
-  const configured =
-    process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
-
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
   if (process.env.NODE_ENV === "development") {
+    const configured =
+      process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
+    if (configured) {
+      return configured.replace(/\/$/, "");
+    }
+
     const host = request.headers.get("host") ?? "127.0.0.1:3000";
     const hostname = host.split(":")[0] || "127.0.0.1";
     return `http://${hostname}:3001`;

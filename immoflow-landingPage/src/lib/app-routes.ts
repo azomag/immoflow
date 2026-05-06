@@ -24,12 +24,12 @@ export type LandingSession = {
 const PRODUCTION_APP_BASE_URL = "https://immoflow-maroc.vercel.app";
 
 export function getAppBaseUrl() {
-  const configured = process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    const configured = process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
+    if (configured) {
+      return configured.replace(/\/$/, "");
+    }
+
     return `${window.location.protocol}//${window.location.hostname}:3001`;
   }
 

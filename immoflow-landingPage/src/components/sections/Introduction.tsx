@@ -10,7 +10,7 @@ export default function Introduction() {
   const { t } = useI18n();
 
   return (
-    <section className="relative overflow-hidden bg-background py-28 md:py-36 noise-overlay">
+    <section id="overview" className="relative overflow-hidden bg-background py-28 md:py-36 noise-overlay">
       <div className="orb orb-gold top-0 right-0 h-[600px] w-[600px] opacity-15" />
       <div className="orb orb-pink bottom-0 left-0 h-[400px] w-[400px] opacity-10" />
 
@@ -38,7 +38,7 @@ export default function Introduction() {
           <motion.a
             whileHover={{ scale: 1.03, x: 4 }}
             whileTap={{ scale: 0.97 }}
-            href="#management"
+            href="#workflows"
             className="group inline-flex items-center gap-3 rounded-full bg-primary px-8 py-4 text-base font-medium text-primary-foreground transition-all duration-300 hover:shadow-xl hover:shadow-primary/15"
           >
             {t.overview.cta}

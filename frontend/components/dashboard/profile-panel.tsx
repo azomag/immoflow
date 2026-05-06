@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import type { AuthenticatedUser } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { prepareImageForUpload } from "@/lib/image-upload";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ export function ProfilePanel({
     password_confirmation: "",
   });
   const [busy, setBusy] = useState(false);
+  const [preparingAvatar, setPreparingAvatar] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +126,29 @@ export function ProfilePanel({
     }
   }
 
+  async function handleAvatarChange(file: File | null) {
+    setError(null);
+
+    if (!file) {
+      setAvatarFile(null);
+      return;
+    }
+
+    try {
+      setPreparingAvatar(true);
+      setAvatarFile(await prepareImageForUpload(file));
+    } catch (avatarError) {
+      setAvatarFile(null);
+      setError(
+        avatarError instanceof Error
+          ? avatarError.message
+          : "Could not prepare the avatar image.",
+      );
+    } finally {
+      setPreparingAvatar(false);
+    }
+  }
+
   return (
     <section className="w-full space-y-8">
       {/* Page title */}
@@ -173,7 +198,7 @@ export function ProfilePanel({
                     type="file"
                     accept="image/*"
                     className="sr-only"
-                    onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => void handleAvatarChange(e.target.files?.[0] ?? null)}
                   />
                 </label>
               </div>
@@ -239,10 +264,10 @@ export function ProfilePanel({
             <div className="mt-6 flex justify-end">
               <Button
                 className="h-11 rounded-xl bg-[var(--primary)] px-6 font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)]"
-                disabled={busy}
+                disabled={busy || preparingAvatar}
                 onClick={() => void saveProfile()}
               >
-                {busy ? "Saving…" : "Save Changes"}
+                {preparingAvatar ? "Preparing image..." : busy ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           </div>
@@ -303,10 +328,10 @@ export function ProfilePanel({
             <div className="mt-6 flex justify-end">
               <Button
                 className="h-11 rounded-xl bg-[var(--primary)] px-6 font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)]"
-                disabled={busy}
+                disabled={busy || preparingAvatar}
                 onClick={() => void saveProfile()}
               >
-                Update Password
+                {preparingAvatar ? "Preparing image..." : "Update Password"}
               </Button>
             </div>
           </div>

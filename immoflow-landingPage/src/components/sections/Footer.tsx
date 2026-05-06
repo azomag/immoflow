@@ -16,7 +16,7 @@ export default function Footer() {
       <div className="container relative z-10 mx-auto max-w-7xl px-6">
         <div className="mb-20 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col lg:col-span-2">
-            <Link href="#home" className="mb-6 inline-flex items-center">
+            <Link href="/" className="mb-6 inline-flex items-center">
               <Image
                 src="/logo/logo-immoflow.png"
                 alt="Immoflow"
@@ -62,11 +62,6 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-16 flex w-full justify-center overflow-hidden pointer-events-none select-none md:mt-24">
-          <span className="whitespace-nowrap font-heading text-[18vw] font-bold leading-none tracking-tighter text-white/[0.03]">
-            Immoflow
-          </span>
-        </div>
       </div>
     </footer>
   );

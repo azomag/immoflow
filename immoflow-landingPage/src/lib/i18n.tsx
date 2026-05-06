@@ -5,7 +5,8 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useCallback,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -15,6 +16,11 @@ type TranslationTree = {
   nav: {
     links: Array<{ label: string; href: string }>;
     cta: string;
+    login: string;
+    signup: string;
+    profileSettings: string;
+    dashboard: string;
+    logout: string;
   };
   hero: {
     badge: string;
@@ -49,6 +55,29 @@ type TranslationTree = {
       priceSuffix: string;
       statusLabel: string;
     }>;
+    filters: {
+      destination: string;
+      destinationPlaceholder: string;
+      bedrooms: string;
+      maxBudget: string;
+      reset: string;
+      categories: {
+        all: string;
+        apartments: string;
+        houses: string;
+        parking: string;
+        premium: string;
+      };
+      availableTitle: string;
+      listingSingular: string;
+      listingPlural: string;
+      publishedByAgents: string;
+      viewAll: string;
+      noResultsTitle: string;
+      noResultsDescription: string;
+      perMonth: string;
+      saveListing: string;
+    };
   };
   workflows: {
     badge: string;
@@ -88,12 +117,17 @@ const translations: Record<Locale, TranslationTree> = {
   en: {
     nav: {
       links: [
-        { label: "Home", href: "#home" },
-        { label: "Listing", href: "#listings" },
-        { label: "Plan", href: "#plans" },
+        { label: "Home", href: "/" },
+        { label: "Platform", href: "#overview" },
+        { label: "Workflows", href: "#workflows" },
         { label: "Contact", href: "#contact" },
       ],
-      cta: "Book a demo",
+      cta: "Login",
+      login: "Login",
+      signup: "Sign up",
+      profileSettings: "Profile settings",
+      dashboard: "Dashboard",
+      logout: "Logout",
     },
     hero: {
       badge: "Rental operations platform",
@@ -179,6 +213,29 @@ const translations: Record<Locale, TranslationTree> = {
           statusLabel: "Move-in ready",
         },
       ],
+      filters: {
+        destination: "Destination",
+        destinationPlaceholder: "City, district, address",
+        bedrooms: "Bedrooms",
+        maxBudget: "Max budget",
+        reset: "Reset",
+        categories: {
+          all: "All",
+          apartments: "Apartments",
+          houses: "Houses",
+          parking: "Parking",
+          premium: "Premium",
+        },
+        availableTitle: "Available homes",
+        listingSingular: "listing",
+        listingPlural: "listings",
+        publishedByAgents: "published by Immoflow agents.",
+        viewAll: "View all",
+        noResultsTitle: "No homes found",
+        noResultsDescription: "Change the filters to show more listings.",
+        perMonth: "/ month",
+        saveListing: "Save listing",
+      },
     },
     workflows: {
       badge: "Management",
@@ -261,7 +318,7 @@ const translations: Record<Locale, TranslationTree> = {
       tagline:
         "Immoflow helps rental teams publish listings, coordinate operations, and keep tenants informed from one platform.",
       columns: [
-        { title: "Navigation", links: ["Home", "Listing", "Plan", "Contact"] },
+        { title: "Navigation", links: ["Home", "Platform", "Workflows", "Contact"] },
         { title: "Product", links: ["Agent workspace", "Tenant portal", "Administration"] },
       ],
       legal: ["Privacy policy", "Terms of service", "Cookies"],
@@ -271,12 +328,17 @@ const translations: Record<Locale, TranslationTree> = {
   fr: {
     nav: {
       links: [
-        { label: "Accueil", href: "#home" },
-        { label: "Listing", href: "#listings" },
-        { label: "Plan", href: "#plans" },
+        { label: "Accueil", href: "/" },
+        { label: "Plateforme", href: "#overview" },
+        { label: "Gestion", href: "#workflows" },
         { label: "Contact", href: "#contact" },
       ],
-      cta: "Demander une demo",
+      cta: "Connexion",
+      login: "Connexion",
+      signup: "Inscription",
+      profileSettings: "Parametres du profil",
+      dashboard: "Tableau de bord",
+      logout: "Deconnexion",
     },
     hero: {
       badge: "Plateforme de gestion locative",
@@ -362,6 +424,29 @@ const translations: Record<Locale, TranslationTree> = {
           statusLabel: "Pret a occuper",
         },
       ],
+      filters: {
+        destination: "Destination",
+        destinationPlaceholder: "Ville, quartier, adresse",
+        bedrooms: "Chambres",
+        maxBudget: "Budget max",
+        reset: "Reset",
+        categories: {
+          all: "Tous",
+          apartments: "Appartements",
+          houses: "Maisons",
+          parking: "Parking",
+          premium: "Premium",
+        },
+        availableTitle: "Logements disponibles",
+        listingSingular: "annonce",
+        listingPlural: "annonces",
+        publishedByAgents: "publiees par les agents Immoflow.",
+        viewAll: "Voir tout",
+        noResultsTitle: "Aucun logement trouve",
+        noResultsDescription: "Change les filtres pour afficher plus d'annonces.",
+        perMonth: "/ mois",
+        saveListing: "Enregistrer l'annonce",
+      },
     },
     workflows: {
       badge: "Gestion",
@@ -444,7 +529,7 @@ const translations: Record<Locale, TranslationTree> = {
       tagline:
         "Immoflow aide les equipes locatives a publier les biens, coordonner la gestion et informer les locataires depuis une seule plateforme.",
       columns: [
-        { title: "Navigation", links: ["Accueil", "Listing", "Plan", "Contact"] },
+        { title: "Navigation", links: ["Accueil", "Plateforme", "Gestion", "Contact"] },
         { title: "Produit", links: ["Espace agent", "Espace locataire", "Administration"] },
       ],
       legal: ["Confidentialite", "Conditions", "Cookies"],
@@ -454,12 +539,17 @@ const translations: Record<Locale, TranslationTree> = {
   ar: {
     nav: {
       links: [
-        { label: "الرئيسية", href: "#home" },
-        { label: "العروض", href: "#listings" },
-        { label: "الخطط", href: "#plans" },
+        { label: "الرئيسية", href: "/" },
+        { label: "المنصة", href: "#overview" },
+        { label: "التسيير", href: "#workflows" },
         { label: "اتصل بنا", href: "#contact" },
       ],
-      cta: "اطلب عرضا",
+      cta: "تسجيل الدخول",
+      login: "تسجيل الدخول",
+      signup: "إنشاء حساب",
+      profileSettings: "إعدادات الملف",
+      dashboard: "لوحة التحكم",
+      logout: "تسجيل الخروج",
     },
     hero: {
       badge: "منصة لتدبير الكراء",
@@ -545,6 +635,29 @@ const translations: Record<Locale, TranslationTree> = {
           statusLabel: "جاهز للسكن",
         },
       ],
+      filters: {
+        destination: "الوجهة",
+        destinationPlaceholder: "المدينة، الحي، العنوان",
+        bedrooms: "الغرف",
+        maxBudget: "أقصى ميزانية",
+        reset: "إعادة",
+        categories: {
+          all: "الكل",
+          apartments: "شقق",
+          houses: "منازل",
+          parking: "موقف",
+          premium: "مميز",
+        },
+        availableTitle: "السكنات المتاحة",
+        listingSingular: "عرض",
+        listingPlural: "عروض",
+        publishedByAgents: "منشورة من طرف وكلاء Immoflow.",
+        viewAll: "عرض الكل",
+        noResultsTitle: "لم يتم العثور على سكن",
+        noResultsDescription: "غيّر المرشحات لعرض المزيد من الإعلانات.",
+        perMonth: "/ الشهر",
+        saveListing: "حفظ الإعلان",
+      },
     },
     workflows: {
       badge: "التسيير",
@@ -627,7 +740,7 @@ const translations: Record<Locale, TranslationTree> = {
       tagline:
         "Immoflow تساعد فرق الكراء على نشر السكنات وتنسيق العمليات وابقاء المكتريين على اطلاع من منصة واحدة.",
       columns: [
-        { title: "التنقل", links: ["الرئيسية", "العروض", "الخطط", "اتصل بنا"] },
+        { title: "التنقل", links: ["الرئيسية", "المنصة", "التسيير", "اتصل بنا"] },
         { title: "المنتج", links: ["فضاء الوكيل", "فضاء المكتري", "الادارة"] },
       ],
       legal: ["الخصوصية", "الشروط", "الكوكيز"],
@@ -645,18 +758,51 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(() => {
-    if (typeof window === "undefined") {
-      return "fr";
-    }
+const DEFAULT_LOCALE: Locale = "fr";
+const LOCALE_STORAGE_KEY = "immoflow-locale";
+const LOCALE_CHANGE_EVENT = "immoflow-locale-change";
 
-    const savedLocale = window.localStorage.getItem("immoflow-locale") as Locale | null;
-    return savedLocale && savedLocale in translations ? savedLocale : "fr";
-  });
+function isLocale(value: string | null): value is Locale {
+  return value === "en" || value === "fr" || value === "ar";
+}
+
+function getStoredLocale() {
+  if (typeof window === "undefined") {
+    return DEFAULT_LOCALE;
+  }
+
+  const savedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  return isLocale(savedLocale) ? savedLocale : DEFAULT_LOCALE;
+}
+
+function subscribeToLocale(callback: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleChange = () => callback();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(LOCALE_CHANGE_EVENT, handleChange);
+
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(LOCALE_CHANGE_EVENT, handleChange);
+  };
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const locale = useSyncExternalStore(
+    subscribeToLocale,
+    getStoredLocale,
+    () => DEFAULT_LOCALE
+  );
+
+  const setLocale = useCallback((nextLocale: Locale) => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
+  }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("immoflow-locale", locale);
     document.documentElement.lang = locale;
     document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
   }, [locale]);
@@ -668,7 +814,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       dir: locale === "ar" ? "rtl" : "ltr",
       t: translations[locale],
     }),
-    [locale]
+    [locale, setLocale]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

@@ -17,6 +17,7 @@ import { gsap } from "gsap";
 import Swal from "sweetalert2";
 import type { AuthenticatedUser, Contrat, Logement, NotificationRecord, Paiement, UserRecord } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { getLandingUrl } from "@/lib/app-routes";
 import { downloadContractPdf, downloadReceiptPdf } from "@/lib/document-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
@@ -42,6 +43,7 @@ type LocataireWorkspaceProps = {
   users: UserRecord[];
   notifications: NotificationRecord[];
   reload: () => Promise<void>;
+  initialTab?: TenantTab;
 };
 
 type TenantTab = "dashboard" | "documents" | "payments" | "notifications" | "profile";
@@ -63,8 +65,9 @@ export function LocataireWorkspace({
   users,
   notifications,
   reload,
+  initialTab,
 }: LocataireWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<TenantTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<TenantTab>(initialTab ?? "dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -292,7 +295,7 @@ export function LocataireWorkspace({
         <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-6 md:px-8">
           <div className="flex items-center gap-10">
             <div className="flex items-center gap-3">
-               <div className="flex h-18 w-18 items-center justify-center overflow-hidden ">
+               <div className="flex h-13 w-13 items-center justify-center overflow-hidden ">
                                 <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                               </div>
             </div>
@@ -318,6 +321,13 @@ export function LocataireWorkspace({
           </div>
 
           <div className="flex items-center gap-4">
+            <a
+              href={getLandingUrl()}
+              className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--foreground)] shadow-[var(--shadow-sm)] transition hover:border-[var(--border-strong)] sm:flex"
+            >
+              <Home className="h-4 w-4" />
+              Landing page
+            </a>
             <NotificationsPopover
               token={token}
               userId={user.id}

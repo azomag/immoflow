@@ -14,6 +14,28 @@ use Illuminate\Support\Str;
 
 class LogementController extends Controller
 {
+    public function publicIndex(): JsonResponse
+    {
+        return response()->json([
+            'logements' => Logement::query()
+                ->with(['agent.user', 'commune', 'typeLogement'])
+                ->where('statut_publication', 'listed')
+                ->latest()
+                ->get(),
+        ]);
+    }
+
+    public function publicShow(Logement $logement): JsonResponse
+    {
+        if ($logement->statut_publication !== 'listed') {
+            abort(404);
+        }
+
+        return response()->json([
+            'logement' => $logement->load(['agent.user', 'commune', 'typeLogement']),
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         /** @var User $user */

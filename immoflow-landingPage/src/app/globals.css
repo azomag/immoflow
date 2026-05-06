@@ -48,6 +48,10 @@
 }
 
 :root {
+  --font-sans: var(--font-poppins);
+  --font-heading: var(--font-poppins);
+  --font-mono: var(--font-poppins);
+
   --background: #FFFFFF;
   --foreground: #1A1A1A;
   
@@ -77,6 +81,12 @@
   --radius: 0.5rem;
 }
 
+html[lang="ar"] {
+  --font-sans: var(--font-tajawal);
+  --font-heading: var(--font-tajawal);
+  --font-mono: var(--font-tajawal);
+}
+
 .dark {
   --background: #0D0D0D;
   --foreground: #FFFFFF;
@@ -104,6 +114,20 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  a,
+  button,
+  label,
+  select,
+  [role="button"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading tracking-tight;

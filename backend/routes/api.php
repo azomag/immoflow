@@ -19,6 +19,9 @@ Route::get('/ping', function () {
     ]);
 });
 
+Route::get('/public/logements', [LogementController::class, 'publicIndex']);
+Route::get('/public/logements/{logement}', [LogementController::class, 'publicShow']);
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);

@@ -18,6 +18,7 @@ import {
   Mail,
 } from "lucide-react";
 import { registerFormWithBackend } from "@/lib/api";
+import { prepareImageForUpload } from "@/lib/image-upload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
     password_confirmation: "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [preparingAvatar, setPreparingAvatar] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -162,6 +164,29 @@ function normalizeAuthError(value: string) {
     setMessage(null);
   }
 
+  async function handleAvatarChange(file: File | null) {
+    resetMessages();
+
+    if (!file) {
+      setAvatarFile(null);
+      return;
+    }
+
+    try {
+      setPreparingAvatar(true);
+      setAvatarFile(await prepareImageForUpload(file));
+    } catch (avatarError) {
+      setAvatarFile(null);
+      setError(
+        avatarError instanceof Error
+          ? avatarError.message
+          : "Could not prepare the avatar image.",
+      );
+    } finally {
+      setPreparingAvatar(false);
+    }
+  }
+
   function selectChoice(nextChoice: SignupChoice) {
     resetMessages();
     setChoice(nextChoice);
@@ -226,7 +251,7 @@ function normalizeAuthError(value: string) {
         if (form.adresse.trim()) payload.set("adresse", form.adresse.trim());
       }
 
-      if (signupRole === "agent" && avatarFile) {
+      if (avatarFile) {
         payload.set("avatar_image", avatarFile);
       }
 
@@ -464,13 +489,13 @@ function normalizeAuthError(value: string) {
                         className="h-11 rounded-xl"
                       />
                     </div>
-                    {choice === "agent" ? (
+                    {choice === "agent" || choice === "locataire" ? (
                       <div className="space-y-2">
                         <Label htmlFor="avatar_image">Profile Image</Label>
                         <label className="flex h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm text-[var(--muted-foreground)] hover:border-[var(--border-strong)] transition-colors">
                           <ImageIcon className="h-4 w-4" />
                           <span className="truncate">
-                            {avatarFile?.name ?? "Upload image"}
+                            {preparingAvatar ? "Preparing image..." : avatarFile?.name ?? "Upload image"}
                           </span>
                           <input
                             id="avatar_image"
@@ -478,7 +503,7 @@ function normalizeAuthError(value: string) {
                             accept="image/*"
                             className="sr-only"
                             onChange={(e) =>
-                              setAvatarFile(e.target.files?.[0] ?? null)
+                              void handleAvatarChange(e.target.files?.[0] ?? null)
                             }
                           />
                         </label>
@@ -634,7 +659,7 @@ function normalizeAuthError(value: string) {
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={pending}
+                  disabled={pending || preparingAvatar}
                   className="h-12 w-full rounded-xl bg-[var(--primary)] font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)] disabled:opacity-60"
                 >
                   {loginMode ? (
@@ -643,11 +668,15 @@ function normalizeAuthError(value: string) {
                     <ShieldCheck className="h-4 w-4" />
                   )}
                   {loginMode
-                    ? pending
+                    ? preparingAvatar
+                      ? "Preparing image..."
+                      : pending
                       ? "Signing in…"
                       : "Sign in"
                     : step === 3
-                    ? pending
+                    ? preparingAvatar
+                      ? "Preparing image..."
+                      : pending
                       ? "Creating…"
                       : `Create ${selectedChoice?.label} account`
                     : "Continue"}

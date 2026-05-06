@@ -15,15 +15,19 @@ export const SmoothScroll = ({ children }: { children: React.ReactNode }) => {
       smoothWheel: true,
     });
 
-    lenis.on("scroll", ScrollTrigger.update);
-
-    gsap.ticker.add((time) => {
+    const handleScroll = () => ScrollTrigger.update();
+    const raf = (time: number) => {
       lenis.raf(time * 1000);
-    });
+    };
+
+    lenis.on("scroll", handleScroll);
+    gsap.ticker.add(raf);
 
     gsap.ticker.lagSmoothing(0);
 
     return () => {
+      lenis.off("scroll", handleScroll);
+      gsap.ticker.remove(raf);
       lenis.destroy();
     };
   }, []);

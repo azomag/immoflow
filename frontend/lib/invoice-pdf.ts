@@ -10,24 +10,16 @@ type InvoiceInput = {
   issuerEmail: string;
 };
 
+const LOGO_PATH = "/assets/profile/logo/immoflow-logo.png";
+
 function money(value: number | string): string {
   const amount = typeof value === "number" ? value : Number.parseFloat(value || "0");
-
-  return new Intl.NumberFormat("fr-MA", {
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  return new Intl.NumberFormat("fr-MA", { maximumFractionDigits: 0 }).format(Number.isFinite(amount) ? amount : 0);
 }
 
 function shortDate(value: string | null): string {
-  if (!value) {
-    return "Open";
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  if (!value) return "Open";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
 export function downloadInvoicePdf({
@@ -39,85 +31,143 @@ export function downloadInvoicePdf({
   issuerEmail,
 }: InvoiceInput): void {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
+  
+  // Calculations
   const paidTotal = payments
-    .filter((payment) => payment.statut.toLowerCase() === "paid")
+    .filter((payment) => payment.statut.toLowerCase() === "paid" || payment.statut.toLowerCase() === "partial")
     .reduce((total, payment) => total + Number.parseFloat(payment.montant || "0"), 0);
   const rent = Number.parseFloat(contract.montant || logement.loyer || "0");
   const balance = Math.max(0, rent - paidTotal);
   const invoiceNumber = `INV-${ref.replace("PRP-", "")}-${new Date().getFullYear()}`;
 
-  doc.setFillColor(23, 20, 17);
-  doc.rect(0, 0, 595, 138, "F");
-  doc.setTextColor(255, 255, 255);
+  // --- HEADER & LOGO ---
+  try {
+    doc.addImage(LOGO_PATH, "PNG", 40, 30, 80, 30, "", "MEDIUM");
+  } catch (e) {
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("IMMOFLOW", 40, 55);
+  }
+
+  // Right Aligned Invoice Info
+  doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(28);
-  doc.text("ImmoFlow", 48, 58);
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "normal");
-  doc.text("Rental invoice", 48, 82);
-  doc.text(invoiceNumber, 410, 58);
-  doc.text(shortDate(new Date().toISOString()), 410, 82);
+  doc.text("INVOICE", 555, 55, { align: "right" });
 
-  doc.setTextColor(23, 20, 17);
-  doc.setFillColor(246, 246, 244);
-  doc.roundedRect(48, 170, 499, 104, 14, 14, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(logement.titre || logement.adresse, 72, 204, { maxWidth: 300 });
+  doc.setTextColor(100, 116, 139); // slate-500
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(90, 86, 80);
-  doc.text(`${logement.adresse} • ${logement.commune.nom}`, 72, 226, { maxWidth: 300 });
-  doc.text(`${logement.type_logement.nom_type} • ${logement.superficie} m²`, 72, 246);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.setTextColor(23, 20, 17);
-  doc.text(`${money(contract.montant)} MAD`, 390, 214);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 86, 80);
-  doc.text("Monthly rent", 390, 236);
+  doc.text(`Invoice Number: ${invoiceNumber}`, 555, 75, { align: "right" });
+  doc.text(`Date of Issue: ${shortDate(new Date().toISOString())}`, 555, 90, { align: "right" });
 
-  doc.setDrawColor(228, 226, 221);
-  doc.line(48, 315, 547, 315);
-  doc.setTextColor(23, 20, 17);
+  // Subtle Separator Line
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(1);
+  doc.line(40, 120, 555, 120);
+
+  // --- PARTIES (ISSUED BY / BILLED TO) ---
+  let y = 160;
+  
+  // Issued By
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("ISSUED BY", 40, y);
+  
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.text(issuerName, 40, y + 15);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 116, 139);
+  doc.text(issuerEmail, 40, y + 30);
+  doc.text("Property Manager", 40, y + 45);
+
+  // Billed To
+  doc.setTextColor(148, 163, 184);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("BILLED TO", 300, y);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.text(contract.locataire.user.name, 300, y + 15);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 116, 139);
+  doc.text(contract.locataire.user.email, 300, y + 30);
+  doc.text("Tenant", 300, y + 45);
+
+  // --- PROPERTY DESCRIPTION BOX ---
+  y = 240;
+  doc.setFillColor(248, 250, 252); // slate-50
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(40, y, 515, 90, 8, 8, "FD");
+
+  doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text("Tenant", 48, 348);
-  doc.text("Manager", 320, 348);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 86, 80);
-  doc.text(contract.locataire.user.name, 48, 371);
-  doc.text(contract.locataire.user.email, 48, 389);
-  doc.text(issuerName, 320, 371);
-  doc.text(issuerEmail, 320, 389);
+  doc.text(logement.titre || logement.adresse, 55, y + 25);
 
-  doc.setTextColor(23, 20, 17);
-  doc.setFont("helvetica", "bold");
-  doc.text("Contract terms", 48, 440);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 86, 80);
-  doc.text(`Start: ${shortDate(contract.date_debut)}`, 48, 464);
-  doc.text(`End: ${shortDate(contract.date_fin)}`, 180, 464);
-  doc.text(`Status: ${contract.statut}`, 312, 464);
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`${logement.adresse} • ${logement.commune.nom}`, 55, y + 45);
+  doc.text(`${logement.type_logement.nom_type} • ${logement.superficie} m²  |  Lease Period: ${shortDate(contract.date_debut)} to ${shortDate(contract.date_fin)}`, 55, y + 65);
 
-  doc.setFillColor(250, 250, 249);
-  doc.roundedRect(48, 500, 499, 92, 12, 12, "F");
+  // --- FINANCIAL SUMMARY ---
+  y = 380;
+  doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(23, 20, 17);
-  doc.text("Payment summary", 72, 532);
+  doc.setFontSize(14);
+  doc.text("Payment Summary", 40, y);
+  y += 20;
+
+  doc.setDrawColor(226, 232, 240);
+  doc.line(40, y, 555, y);
+  y += 25;
+
+  // Rent row
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 86, 80);
-  doc.text(`Paid: ${money(paidTotal)} MAD`, 72, 558);
-  doc.text(`Balance: ${money(balance)} MAD`, 240, 558);
-  doc.text(`Confirmation: ${balance === 0 ? "Complete" : "Tenant approval or payment pending"}`, 72, 578);
+  doc.setFontSize(11);
+  doc.text("Monthly Rent Amount", 40, y);
+  doc.text(`${money(contract.montant)} MAD`, 555, y, { align: "right" });
+  y += 25;
 
-  doc.setFillColor(134, 98, 52);
-  doc.roundedRect(48, 642, 499, 54, 14, 14, "F");
-  doc.setTextColor(255, 255, 255);
+  // Paid row
+  doc.text("Total Payments Applied", 40, y);
+  doc.text(`-${money(paidTotal)} MAD`, 555, y, { align: "right" });
+  y += 25;
+
+  // Divider for total
+  doc.line(350, y, 555, y);
+  y += 25;
+
+  // Balance Due
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("Professional rental invoice generated by ImmoFlow", 72, 674);
+  doc.setFontSize(14);
+  doc.text("Balance Due", 350, y);
+  doc.text(`${money(balance)} MAD`, 555, y, { align: "right" });
+  y += 30;
+
+  // Status Stamp
+  if (balance === 0) {
+    doc.setTextColor(22, 163, 74); // green-600
+    doc.text("PAID IN FULL", 555, y, { align: "right" });
+  } else {
+    doc.setTextColor(220, 38, 38); // red-600
+    doc.text("PAYMENT PENDING", 555, y, { align: "right" });
+  }
+
+  // --- FOOTER ---
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(1);
+  doc.line(40, 780, 555, 780);
+
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text("Professional rental invoice securely generated by ImmoFlow Platform.", 297, 805, { align: "center" });
 
   doc.save(`${invoiceNumber.toLowerCase()}.pdf`);
 }

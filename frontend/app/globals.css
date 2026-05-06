@@ -117,6 +117,23 @@ a {
   text-decoration: none;
 }
 
+a,
+button,
+label,
+select,
+[role="button"],
+[data-slot="dropdown-menu-item"] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 button,
 input,
 select,

@@ -11,7 +11,7 @@ export default function WhyChooseUs() {
 
   return (
     <section
-      id="management"
+      id="workflows"
       className="relative overflow-hidden bg-background py-28 md:py-36 noise-overlay"
     >
       <div className="orb orb-blue top-0 left-0 h-[500px] w-[500px] opacity-10" />

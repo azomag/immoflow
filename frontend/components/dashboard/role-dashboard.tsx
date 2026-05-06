@@ -167,6 +167,11 @@ function DashboardError({
 
 export function RoleDashboard({ role }: { role: AppRole }) {
   const { data: session, status } = useSession();
+  const initialTab =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("tab") === "profile"
+      ? "profile"
+      : undefined;
   const token = session?.user.backendToken;
   const user = session?.user.backendUser;
   const [data, setData] = useState<DashboardData>({
@@ -293,6 +298,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
           communes={data.communes}
           types={data.types}
           reload={loadData}
+          initialTab={initialTab}
         />
       </div>
     );
@@ -312,6 +318,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
           communes={data.communes}
           types={data.types}
           reload={loadData}
+          initialTab={initialTab}
         />
       </div>
     );
@@ -328,6 +335,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
         users={data.users}
         notifications={data.notifications}
         reload={loadData}
+        initialTab={initialTab}
       />
     </div>
   );

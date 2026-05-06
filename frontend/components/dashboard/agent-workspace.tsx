@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  ExternalLink,
   FileDown,
   Flame,
   CircleHelp,
@@ -34,6 +35,10 @@ import {
   Users,
   Trash2,
   X,
+  MapPin,
+  Check,
+  Clock3,
+  Ban
 } from "lucide-react";
 import { gsap } from "gsap";
 import type {
@@ -47,6 +52,7 @@ import type {
   UserRecord,
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
+import { getLandingUrl } from "@/lib/app-routes";
 import { formatFileSize, prepareImagesForUpload } from "@/lib/image-upload";
 import { downloadContractPdf } from "@/lib/document-pdf";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
@@ -88,6 +94,7 @@ type AgentWorkspaceProps = {
   communes: Commune[];
   types: TypeLogement[];
   reload: () => Promise<void>;
+  initialTab?: AgentTab;
 };
 
 type AgentTab = "dashboard" | "properties" | "contracts" | "payments" | "tenants" | "notifications" | "profile";
@@ -126,8 +133,9 @@ export function AgentWorkspace({
   communes,
   types,
   reload,
+  initialTab,
 }: AgentWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<AgentTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<AgentTab>(initialTab ?? "dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(true);
@@ -161,6 +169,15 @@ export function AgentWorkspace({
     montant: "",
     statut: "active",
   });
+  const [typeFilter, setTypeFilter] = useState("All");
+
+  const propertyTypeTabs = useMemo(() => {
+    const uniqueTypes = Array.from(
+      new Set(logements.map((l) => l.type_logement.nom_type))
+    );
+    return ["All", ...uniqueTypes];
+  }, [logements]);
+
   const [paymentForm, setPaymentForm] = useState({
     contrat_id: "",
     montant: "",
@@ -171,6 +188,7 @@ export function AgentWorkspace({
     cash_note: "",
     statut: "awaiting_tenant_approval",
   });
+
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -187,11 +205,12 @@ export function AgentWorkspace({
   const normalizedSearch = search.trim().toLowerCase();
 
   const filteredProperties = useMemo(() => {
-    return propertySnapshots.filter((snapshot) => {
-      if (!normalizedSearch) {
-        return true;
-      }
-
+    let list = propertySnapshots;
+    if (typeFilter !== "All") {
+      list = list.filter((s) => s.logement.type_logement.nom_type === typeFilter);
+    }
+    return list.filter((snapshot) => {
+      if (!normalizedSearch) return true;
       return [
         snapshot.ref,
         snapshot.logement.adresse,
@@ -203,7 +222,7 @@ export function AgentWorkspace({
         .toLowerCase()
         .includes(normalizedSearch);
     });
-  }, [normalizedSearch, propertySnapshots]);
+  }, [normalizedSearch, propertySnapshots, typeFilter]);
 
   const selectedProperty =
     propertySnapshots.find((snapshot) => snapshot.logement.id === selectedPropertyId) ?? null;
@@ -271,6 +290,7 @@ export function AgentWorkspace({
     }
     return paiements.filter((entry) => entry.contrat.locataire.user.id === tenantDetails.id);
   }, [paiements, tenantDetails]);
+  
   const totalPropertyImageCount = propertyExistingImages.length + propertyImageFiles.length;
 
   const filteredContracts = useMemo(() => {
@@ -342,20 +362,15 @@ export function AgentWorkspace({
     if (!notice && !error) {
       return;
     }
-
     const timeout = window.setTimeout(() => {
       setNotice(null);
       setError(null);
     }, 3600);
-
     return () => window.clearTimeout(timeout);
   }, [error, notice]);
 
   useEffect(() => {
-    if (!workspaceRef.current) {
-      return;
-    }
-
+    if (!workspaceRef.current) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
         ".nav-animate",
@@ -363,20 +378,13 @@ export function AgentWorkspace({
         { x: 0, opacity: 1, duration: 0.32, ease: "power2.out", stagger: 0.035 },
       );
     }, workspaceRef);
-
     return () => ctx.revert();
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    if (!contentRef.current) {
-      return;
-    }
-
+    if (!contentRef.current) return;
     const panels = Array.from(contentRef.current.children);
-    if (!panels.length) {
-      return;
-    }
-
+    if (!panels.length) return;
     gsap.fromTo(
       panels,
       { y: 16, opacity: 0 },
@@ -429,7 +437,6 @@ export function AgentWorkspace({
         setNotice((current) => current ?? "Saved. Data refresh is taking longer, please refresh once.");
         return;
       }
-
       setError(mutationError instanceof Error ? mutationError.message : "Request failed.");
     } finally {
       setBusy(false);
@@ -526,9 +533,7 @@ export function AgentWorkspace({
   }
 
   async function handlePropertyImagesChange(files: File[]) {
-    if (files.length === 0) {
-      return;
-    }
+    if (files.length === 0) return;
 
     const remainingSlots = Math.max(0, 10 - (propertyExistingImages.length + propertyImageFiles.length));
     if (remainingSlots <= 0) {
@@ -574,7 +579,6 @@ export function AgentWorkspace({
     if (previewToRevoke) {
       URL.revokeObjectURL(previewToRevoke);
     }
-
     setPropertyImageFiles((current) => current.filter((_, i) => i !== index));
     setPropertyImagePreviewUrls((current) => current.filter((_, i) => i !== index));
   }
@@ -714,9 +718,7 @@ export function AgentWorkspace({
       confirmButtonColor: "#dc2626",
     });
 
-    if (!result.isConfirmed) {
-      return;
-    }
+    if (!result.isConfirmed) return;
 
     await runMutation(async () => {
       await backendRequest(`/api/contrats/${contrat.id}`, { method: "DELETE" }, token);
@@ -772,7 +774,6 @@ export function AgentWorkspace({
       setError("No contract attached to this property.");
       return;
     }
-
     downloadInvoicePdf({
       ref: snapshot.ref,
       logement: snapshot.logement,
@@ -796,9 +797,7 @@ export function AgentWorkspace({
       confirmButtonColor: "#dc2626",
     });
 
-    if (!result.isConfirmed) {
-      return;
-    }
+    if (!result.isConfirmed) return;
 
     await runMutation(async () => {
       await backendRequest(`/api/logements/${snapshot.logement.id}`, { method: "DELETE" }, token);
@@ -819,18 +818,25 @@ export function AgentWorkspace({
   return (
     <div ref={workspaceRef} className="min-h-screen bg-[var(--background)]">
       <div className={`grid min-h-screen transition-[grid-template-columns] duration-300 ${sidebarCollapsed ? "lg:grid-cols-[96px_minmax(0,1fr)]" : "lg:grid-cols-[306px_minmax(0,1fr)]"}`}>
-        {/* ── Sidebar ── */}
-        <aside className={`sidebar-dark fixed inset-y-0 left-0 z-40 flex w-[306px] flex-col border-r border-[var(--sidebar-border)] px-5 py-6 transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} ${sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[306px]"}`}>
+        
+        {/* ── SIDEBAR ── */}
+        <aside className={`fixed inset-y-0 left-0 z-40 flex w-[306px] flex-col px-5 py-6 transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} ${sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[306px]"} bg-white/60 backdrop-blur-2xl backdrop-saturate-150 border-r border-white/30 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
+          <button
+            type="button"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="absolute -right-4 top-8 hidden h-8 w-8 items-center justify-center rounded-full border border-white/40 bg-white/80 backdrop-blur-md text-[var(--foreground)] shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition hover:-right-5 hover:border-white/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] lg:flex"
+            onClick={() => setSidebarCollapsed((current) => !current)}
+          >
+            <ChevronLeft className={`h-4 w-4 transition-transform duration-300 ${sidebarCollapsed ? "rotate-180" : ""}`} />
+          </button>
+
           <div className="space-y-1 px-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="flex h-13 w-13 items-center justify-center overflow-hidden ">
+                <div className="flex h-13 w-13 items-center justify-center overflow-hidden">
                   <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={100} height={100} className="h-full w-full object-contain" />
                 </div>
               </div>
-              <button type="button" className="hidden rounded-full p-2 text-[var(--sidebar-text)]/70 transition hover:bg-[var(--sidebar-hover-bg)] lg:block" onClick={() => setSidebarCollapsed((current) => !current)}>
-                <ChevronLeft className={`h-5 w-5 transition-transform ${sidebarCollapsed ? "rotate-180" : ""}`} />
-              </button>
               <button type="button" className="rounded-full p-2 text-[var(--sidebar-text)]/70 lg:hidden" onClick={() => setSidebarOpen(false)}>
                 <X className="h-5 w-5" />
               </button>
@@ -838,24 +844,34 @@ export function AgentWorkspace({
             <div className="h-4" />
           </div>
 
-          <nav className="mt-8 space-y-1">
+          <nav className="mt-8 flex flex-col gap-1 px-3">
             {navItems.map((item) => {
+              const isActive = activeTab === item.id;
+              
               const link = (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => openTab(item.id)}
-                    className={`nav-item nav-animate ${activeTab === item.id ? "active" : ""} ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
-                  >
-                  <item.icon className="h-5 w-5 shrink-0" />
-                  <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => openTab(item.id)}
+                  className={`flex w-full items-center rounded-xl transition-all duration-200 ${
+                    sidebarCollapsed ? "justify-center p-3" : "px-3 py-2.5 gap-3"
+                  } ${
+                    isActive
+                      ? "bg-[var(--primary)] text-white shadow-md"
+                      : "text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]"
+                  }`}
+                >
+                  <item.icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : ""}`} />
+                  {!sidebarCollapsed && (
+                    <span className="truncate text-sm font-medium">{item.label}</span>
+                  )}
                 </button>
               );
 
               return sidebarCollapsed ? (
                 <Tooltip key={item.id}>
                   <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={16} className="rounded-lg bg-white font-semibold text-[var(--foreground)] shadow-[var(--shadow-lg)] border-[var(--border)]">
+                  <TooltipContent side="right" sideOffset={16} className="rounded-lg bg-white/90 backdrop-blur-lg font-semibold text-[var(--foreground)] shadow-xl border border-white/20">
                     {item.label}
                   </TooltipContent>
                 </Tooltip>
@@ -866,50 +882,22 @@ export function AgentWorkspace({
           </nav>
 
           <div className="mt-auto space-y-5 pt-10">
-            <div className={`rounded-[20px] border border-[var(--sidebar-border)] bg-[var(--accent)]/25 p-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-hover-bg)]"
-                onClick={() => setCreateMenuOpen((current) => !current)}
-              >
-                <span className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Quick create
-                </span>
-                <ChevronDown className={`h-4 w-4 transition ${createMenuOpen ? "rotate-180" : ""}`} />
-              </button>
-              <div
-                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-                  createMenuOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                }`}
-              >
-                <div className="min-h-0 overflow-hidden">
-                  <div className="space-y-1 pt-1">
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openPropertyWizard}>
-                      Add property
-                    </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openContractWizard}>
-                      Create contract
-                    </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={openPaymentWizard}>
-                      Record payment
-                    </button>
-                    <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]" onClick={() => openTab("notifications")}>
-                      New message
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className={`space-y-2 border-t border-[var(--sidebar-border)] pt-4 text-[15px] text-[var(--sidebar-text)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text-active)]">
+           
+            <div className={`space-y-2 border-t border-black/5 pt-4 text-[15px] text-[var(--sidebar-text)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+              <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-black/5 hover:text-[var(--sidebar-text-active)]">
                 <CircleHelp className="h-5 w-5 shrink-0" />
                 <span>Support</span>
               </button>
+              <a
+                href={getLandingUrl()}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-black/5 hover:text-[var(--sidebar-text-active)]"
+              >
+                <ExternalLink className="h-5 w-5 shrink-0" />
+                <span>Landing page</span>
+              </a>
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[var(--danger)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[var(--danger)] transition hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
                 onClick={() => startTransition(() => void signOut({ callbackUrl: "/login" }))}
               >
                 <ChevronLeft className="h-5 w-5 shrink-0" />
@@ -921,134 +909,146 @@ export function AgentWorkspace({
 
         {sidebarOpen ? <button type="button" aria-label="Close sidebar" className="fixed inset-0 z-30 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} /> : null}
 
-        <main className="min-w-0 px-6 py-5 md:px-10 md:py-6">
-          <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex w-full items-center gap-3 xl:max-w-[760px]">
-              <button type="button" className="rounded-2xl border border-[var(--border)] bg-white p-3 text-[var(--foreground)] lg:hidden shadow-[var(--shadow-sm)]" onClick={() => setSidebarOpen(true)}>
+        {/* ── MAIN CONTENT ── */}
+        <main className="min-w-0 flex-1 overflow-y-auto bg-[#fafafa]/50 px-4 py-6 md:px-8 md:py-8">
+          <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex w-full items-center gap-3 xl:max-w-[640px]">
+              <button
+                type="button"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--foreground)] shadow-sm transition-colors hover:bg-slate-50 lg:hidden"
+                onClick={() => setSidebarOpen(true)}
+              >
                 <Menu className="h-5 w-5" />
               </button>
-              <div className="relative w-full max-w-[720px]">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted-foreground)]" />
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={searchPlaceholder}
-                  className="h-12 rounded-2xl border-[var(--border)] bg-white pl-12 shadow-[var(--shadow-sm)] focus-visible:ring-[var(--ring)]"
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-11 text-sm shadow-sm transition-all focus-visible:border-[var(--primary)] focus-visible:ring-4 focus-visible:ring-[var(--primary)]/10"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-4">
+            <div className="flex shrink-0 items-center justify-end gap-3">
               <NotificationsPopover
                 token={token}
                 userId={user.id}
                 notifications={notifications}
               />
-              <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--muted-foreground)] shadow-[var(--shadow-sm)] transition hover:text-[var(--foreground)] hover:border-[var(--border-strong)]">
-                <CircleHelp className="h-4 w-4" />
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm transition hover:border-[var(--border-strong)] hover:text-[var(--foreground)] hover:shadow-md"
+              >
+                <CircleHelp className="h-[18px] w-[18px]" />
               </button>
-              <AvatarMenu user={user} onProfile={() => openTab("profile")} />
+              <div className="ml-1 pl-4 border-l border-[var(--border)]">
+                <AvatarMenu user={user} onProfile={() => openTab("profile")} />
+              </div>
             </div>
           </header>
 
           {(notice || error) ? (
-            <div className="fixed right-6 top-6 z-50 max-w-sm rounded-2xl border border-black/8 bg-white px-5 py-4 text-sm shadow-[0_18px_55px_rgba(15,23,42,0.16)]">
-              <div className={`font-semibold ${error ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
-                {error ? "Action failed" : "Done"}
+            <div className="fixed right-6 top-6 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-[var(--border)] bg-white px-5 py-4 shadow-xl animate-in slide-in-from-top-4">
+              <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full ${error ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}>
+                {error ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
               </div>
-              <div className="mt-1 text-black/60">{error ?? notice}</div>
+              <div>
+                <div className={`text-sm font-semibold ${error ? "text-red-600" : "text-green-600"}`}>
+                  {error ? "Action failed" : "Success"}
+                </div>
+                <div className="mt-1 text-sm text-[var(--muted-foreground)]">{error ?? notice}</div>
+              </div>
             </div>
           ) : null}
 
-          <div ref={contentRef} className="mt-8 space-y-8">
+          <div ref={contentRef} className="mt-8 space-y-8 pb-12">
+            
+            {/* ── DASHBOARD TAB ── */}
             {activeTab === "dashboard" ? (
               <>
-                <section className="grid gap-5 xl:grid-cols-[repeat(3,minmax(0,1fr))_280px]">
-                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(1,73,124,0.08)] text-[var(--primary)]">
-                        <Building2 className="h-5 w-5" />
-                      </div>
+                <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_280px]">
+                  <div className="group rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-100">
+                      <Building2 className="h-5 w-5" />
                     </div>
-                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                       My Properties
                     </div>
-                    <div className="mt-3 flex items-end gap-3">
-                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{logements.length}</div>
-                      <div className="pb-1 text-sm font-semibold text-[var(--success)]">portfolio</div>
+                    <div className="mt-2 flex items-baseline gap-3">
+                      <div className="text-3xl font-bold tracking-tight text-[var(--foreground)]">{logements.length}</div>
+                      <div className="text-xs font-medium text-emerald-600">portfolio</div>
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(44,125,160,0.08)] text-[var(--secondary)]">
-                        <FileText className="h-5 w-5" />
-                      </div>
+                  <div className="group rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 transition-colors group-hover:bg-cyan-100">
+                      <FileText className="h-5 w-5" />
                     </div>
-                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                       Active Contracts
                     </div>
-                    <div className="mt-3 flex items-end gap-3">
-                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{activeContractsCount}</div>
-                      <div className="pb-1 text-sm font-semibold text-[var(--muted-foreground)]">
+                    <div className="mt-2 flex items-baseline gap-3">
+                      <div className="text-3xl font-bold tracking-tight text-[var(--foreground)]">{activeContractsCount}</div>
+                      <div className="text-xs font-medium text-[var(--muted-foreground)]">
                         {contrats.length === 0 ? "No contracts yet" : `${contrats.length} total`}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(70,143,175,0.08)] text-[var(--success)]">
-                        <CreditCard className="h-5 w-5" />
-                      </div>
+                  <div className="group rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-emerald-100">
+                      <CreditCard className="h-5 w-5" />
                     </div>
-                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                       Collections
                     </div>
-                    <div className="mt-3 flex items-end gap-2">
-                      <div className="text-4xl font-bold tracking-tight text-[var(--foreground)]">{formatMoney(collectionsTotal)}</div>
-                      <div className="pb-1 text-sm font-semibold text-[var(--muted-foreground)]">MAD</div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <div className="text-3xl font-bold tracking-tight text-[var(--foreground)]">{formatMoney(collectionsTotal)}</div>
+                      <div className="text-xs font-medium text-[var(--muted-foreground)]">MAD</div>
                     </div>
                   </div>
 
-                  <div className="rounded-3xl stat-indigo p-7 shadow-[var(--shadow-primary)] card-lift">
+                  <div className="flex flex-col justify-between rounded-2xl bg-[var(--primary)] p-6 text-white shadow-lg sm:col-span-2 xl:col-span-1">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
                           Pending Signatures
                         </div>
-                        <div className="mt-4 text-5xl font-bold tracking-tight">
+                        <div className="mt-2 text-4xl font-bold tracking-tight">
                           {contrats.filter((contrat) => contrat.signature_status === "pending").length}
                         </div>
                       </div>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent)]">
-                        <CalendarDays className="h-6 w-6 text-[var(--primary)]" />
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+                        <CalendarDays className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </div>
                 </section>
 
-                <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
-                  <div>
-                    <div className="mb-5 flex items-center justify-between">
-                      <h2 className="text-[21px] font-bold tracking-tight text-[var(--foreground)]">My Properties</h2>
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+                  <div className="min-w-0">
+                    <div className="mb-5 flex items-center justify-between px-1">
+                      <h2 className="text-xl font-bold tracking-tight text-[var(--foreground)]">My Properties</h2>
                       <button
                         type="button"
-                        className="text-[14px] font-semibold text-[var(--primary)] hover:underline underline-offset-4"
+                        className="text-sm font-semibold text-[var(--primary)] transition hover:text-[var(--primary-hover)] hover:underline hover:underline-offset-4"
                         onClick={() => openTab("properties")}
                       >
                         View All
                       </button>
                     </div>
 
-                    <div className="overflow-x-auto rounded-3xl border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
-                      <div className="min-w-[760px]">
-                        <div className="grid grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] bg-[var(--muted)] px-8 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                          <div>Ref</div>
+                    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+                      <div className="w-full">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] sm:grid-cols-[100px_minmax(0,1.5fr)_140px_140px] sm:px-6">
+                          <div className="hidden sm:block">Ref</div>
                           <div>Property Name</div>
-                          <div>Status</div>
-                          <div>Next Event</div>
+                          <div className="text-right sm:text-left">Status</div>
+                          <div className="hidden sm:block">Next Event</div>
                         </div>
+
                         {filteredProperties.slice(0, 4).map((property) => (
                           <button
                             key={property.logement.id}
@@ -1057,24 +1057,24 @@ export function AgentWorkspace({
                               openTab("properties");
                               setSelectedPropertyId(property.logement.id);
                             }}
-                            className="table-row-hover grid w-full grid-cols-[120px_minmax(0,1.5fr)_190px_160px] gap-4 border-b border-[var(--border)] px-8 py-4 text-left last:border-b-0"
+                            className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-[var(--border)] px-4 py-4 text-left transition-colors hover:bg-slate-50/80 last:border-b-0 sm:grid-cols-[100px_minmax(0,1.5fr)_140px_140px] sm:px-6"
                           >
-                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">{property.ref}</div>
-                            <div className="flex items-center gap-4">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] text-xs font-bold text-[var(--foreground)]">
+                            <div className="hidden text-sm font-medium text-[var(--muted-foreground)] sm:block">{property.ref}</div>
+                            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-slate-50 text-xs font-bold text-[var(--foreground)] group-hover:bg-white">
                                 {property.logement.type_logement.nom_type.slice(0, 2).toUpperCase()}
                               </div>
-                              <div>
-                                <div className="text-[15px] font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
-                                <div className="text-xs text-[var(--muted-foreground)]">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
+                                <div className="truncate text-xs text-[var(--muted-foreground)]">
                                   {property.tenantName ?? property.logement.commune.nom}
                                 </div>
                               </div>
                             </div>
-                            <div className="self-center">
+                            <div className="text-right sm:text-left">
                               <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
                             </div>
-                            <div className="self-center text-sm font-medium text-[var(--muted-foreground)]">
+                            <div className="hidden text-sm font-medium text-[var(--muted-foreground)] sm:block">
                               {formatShortDate(property.nextEventDate)}
                             </div>
                           </button>
@@ -1083,22 +1083,24 @@ export function AgentWorkspace({
                     </div>
                   </div>
 
-                  <div>
-                    <h2 className="mb-5 text-[21px] font-bold tracking-tight text-[var(--foreground)]">Recent Activity</h2>
-                    <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)]">
+                  <div className="min-w-0">
+                    <h2 className="mb-5 px-1 text-xl font-bold tracking-tight text-[var(--foreground)]">Recent Activity</h2>
+                    <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
                       <div className="space-y-6">
                         {recentActivity.map((item, index) => (
                           <div key={item.id} className="relative flex gap-4">
                             <div className="relative flex flex-col items-center">
-                              <div className="z-10 h-4 w-4 rounded-full border-[3px] border-[var(--primary)] bg-white shadow-[0_0_0_2px_rgba(1,73,124,0.2)]" />
+                              <div className="z-10 h-3.5 w-3.5 rounded-full border-2 border-[var(--primary)] bg-white ring-4 ring-[var(--primary)]/10" />
                               {index !== recentActivity.length - 1 ? (
-                                <div className="absolute top-4 bottom-[-24px] w-0.5 bg-[var(--border)]" />
+                                <div className="absolute bottom-[-24px] top-3.5 w-px bg-[var(--border)]" />
                               ) : null}
                             </div>
-                            <div className="pb-1 pt-0.5">
-                              <div className="text-[15px] font-semibold text-[var(--foreground)]">{item.title}</div>
-                              <div className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{item.description}</div>
-                              <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
+                            <div className="-mt-1.5 min-w-0 pb-1">
+                              <div className="truncate text-sm font-semibold text-[var(--foreground)]">{item.title}</div>
+                              <div className="mt-0.5 text-xs leading-relaxed text-[var(--muted-foreground)] line-clamp-2">
+                                {item.description}
+                              </div>
+                              <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--primary)]">
                                 {item.when}
                               </div>
                             </div>
@@ -1111,21 +1113,40 @@ export function AgentWorkspace({
               </>
             ) : null}
 
+            {/* ── PROPERTIES TAB (LIST) ── */}
             {activeTab === "properties" && !selectedProperty ? (
-              <section className="space-y-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <section className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h1 className="text-[28px] font-semibold tracking-tight">Properties</h1>
-                    <p className="mt-1 text-sm text-black/50">Create listings with a guided Airbnb-style flow.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">Properties</h1>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">Create listings with a guided flow.</p>
                   </div>
-                  <Button className="rounded-2xl" onClick={openPropertyWizard}>
-                    <Plus className="h-4 w-4" />
+                  <Button className="w-full sm:w-auto rounded-xl shadow-sm" onClick={openPropertyWizard}>
+                    <Plus className="mr-2 h-4 w-4" />
                     Create property
                   </Button>
                 </div>
-                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+
+                <div className="flex overflow-x-auto items-center gap-2 border-b border-[var(--border)] pb-4 hide-scrollbar">
+                  {propertyTypeTabs.map((entry) => (
+                    <button
+                      key={entry}
+                      type="button"
+                      onClick={() => setTypeFilter(entry)}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                        typeFilter === entry
+                          ? "bg-slate-100 text-[var(--foreground)]"
+                          : "text-[var(--muted-foreground)] hover:bg-slate-50 hover:text-[var(--foreground)]"
+                      }`}
+                    >
+                      {entry}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm w-full">
                   <div className="min-w-[980px]">
-                    <div className="grid grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                    <div className="grid grid-cols-[100px_minmax(0,1.5fr)_130px_100px_120px_140px_56px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                       <div>Ref</div>
                       <div>Property</div>
                       <div>Type</div>
@@ -1139,77 +1160,64 @@ export function AgentWorkspace({
                       <div
                         key={property.logement.id}
                         onClick={() => setSelectedPropertyId(property.logement.id)}
-                        className="grid w-full grid-cols-[128px_minmax(0,1.5fr)_140px_120px_120px_170px_56px] gap-4 border-t border-black/6 px-7 py-4 text-left transition hover:bg-black/[0.02]"
+                        className="group grid w-full cursor-pointer grid-cols-[100px_minmax(0,1.5fr)_130px_100px_120px_140px_56px] items-center gap-4 border-b border-[var(--border)] px-6 py-3.5 text-left text-sm transition-colors hover:bg-slate-50/80 last:border-b-0"
                       >
-                        <div className="self-center text-[15px] text-black/60">{property.ref}</div>
+                        <div className="font-medium text-[var(--muted-foreground)]">{property.ref}</div>
                         <div className="min-w-0">
-                          <div className="truncate text-[17px] font-semibold">{property.logement.adresse}</div>
-                          <div className="truncate text-sm text-black/45">{property.logement.commune.nom}</div>
+                          <div className="truncate font-semibold text-[var(--foreground)]">{property.logement.adresse}</div>
+                          <div className="truncate text-xs text-[var(--muted-foreground)]">{property.logement.commune.nom}</div>
                         </div>
-                        <div className="self-center text-[15px]">{property.logement.type_logement.nom_type}</div>
-                        <div className="self-center text-[15px]">{property.logement.superficie} m²</div>
-                        <div className="self-center text-[15px]">{formatMoney(property.logement.loyer)} MAD</div>
-                        <div className="self-center">
+                        <div className="text-[var(--foreground)]">{property.logement.type_logement.nom_type}</div>
+                        <div className="text-[var(--muted-foreground)]">{property.logement.superficie} m²</div>
+                        <div className="font-medium text-[var(--foreground)]">{formatMoney(property.logement.loyer)} MAD</div>
+                        <div>
                           <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
                         </div>
-                        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
                           <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Property actions"
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
-                            >
-                              <Ellipsis className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem
-                              className="text-gray-600"
-                              onClick={() => setSelectedPropertyId(property.logement.id)}
-                            >
-                              <Eye className="h-4 w-4 text-gray-500" />
-                              Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-blue-700"
-                              onClick={() => beginEditProperty(property)}
-                            >
-                              <PencilLine className="h-4 w-4 text-blue-600" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-emerald-700"
-                              disabled={!property.latestContract}
-                              onClick={() => handleInvoice(property)}
-                            >
-                              <FileDown className="h-4 w-4 text-emerald-600" />
-                              Download PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-700 focus:text-red-700"
-                              onClick={() => void handleDeleteProperty(property)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Property actions"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm transition-colors hover:bg-slate-50 hover:text-[var(--foreground)]"
+                              >
+                                <Ellipsis className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                              <DropdownMenuItem onClick={() => setSelectedPropertyId(property.logement.id)}>
+                                <Eye className="mr-2 h-4 w-4 text-[var(--muted-foreground)]" />
+                                Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => beginEditProperty(property)}>
+                                <PencilLine className="mr-2 h-4 w-4 text-blue-600" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={!property.latestContract} onClick={() => handleInvoice(property)}>
+                                <FileDown className="mr-2 h-4 w-4 text-emerald-600" />
+                                Download PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => void handleDeleteProperty(property)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </div>
-
               </section>
             ) : null}
 
+            {/* ── PROPERTIES TAB (DETAIL VIEW) ── */}
             {activeTab === "properties" && selectedProperty ? (
-              <section className="space-y-8">
+              <section className="space-y-6">
                 <button
                   type="button"
                   onClick={() => setSelectedPropertyId(null)}
-                  className="flex items-center gap-2 text-sm font-medium text-black/55"
+                  className="flex items-center gap-2 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Back to properties
@@ -1217,116 +1225,80 @@ export function AgentWorkspace({
 
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
-                    <div className="text-sm font-semibold uppercase tracking-[0.22em] text-black/35">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
+                      <MapPin className="h-3.5 w-3.5" />
                       {selectedProperty.logement.commune.nom}
                     </div>
-                    <h1 className="mt-4 text-[46px] font-semibold tracking-tight">
+                    <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--foreground)]">
                       {selectedProperty.logement.adresse}
                     </h1>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl"
-                      onClick={() => handleShareProperty(selectedProperty)}
-                    >
-                      <Share2 className="h-4 w-4" />
-                      Share
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="outline" className="flex-1 sm:flex-none rounded-xl shadow-sm bg-white" onClick={() => handleShareProperty(selectedProperty)}>
+                      <Share2 className="mr-2 h-4 w-4" /> Share
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl"
-                      onClick={() => beginEditProperty(selectedProperty)}
-                    >
-                      Edit
+                    <Button variant="default" className="flex-1 sm:flex-none rounded-xl shadow-sm" onClick={() => beginEditProperty(selectedProperty)}>
+                      <PencilLine className="mr-2 h-4 w-4" /> Edit Property
                     </Button>
                   </div>
                 </div>
 
-                <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
-                  <div className="space-y-6">
-                    <div className="overflow-hidden rounded-[28px] border border-black/6 bg-white">
-                      {selectedProperty.logement.images?.[0] ? (
-                        <div className="relative min-h-[340px] overflow-hidden">
-                          <button
-                            type="button"
-                            className="block h-[340px] w-full"
-                            onClick={() =>
-                              setPropertyImageViewer({
-                                images: selectedProperty.logement.images ?? [],
-                                index: 0,
-                              })
-                            }
-                          >
-                            <img
-                              src={selectedProperty.logement.images[0]}
-                              alt={selectedProperty.logement.adresse}
-                              className="h-[340px] w-full object-cover"
-                            />
-                          </button>
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                          <div className="absolute bottom-6 left-6 right-6 text-white">
-                            <Badge variant={toneForStatus(selectedProperty.status)}>{selectedProperty.status}</Badge>
-                            <div className="mt-4 max-w-md text-4xl font-semibold tracking-tight">
-                              {selectedProperty.logement.type_logement.nom_type}
-                            </div>
-                            <div className="mt-2 text-white/75">{selectedProperty.ref}</div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="min-h-[340px] bg-[radial-gradient(circle_at_10%_20%,#f4ead8,transparent_22%),linear-gradient(135deg,#d4dfef,#f5f1ea_58%,#d7e1d1)] p-8">
-                          <Badge variant={toneForStatus(selectedProperty.status)}>{selectedProperty.status}</Badge>
-                          <div className="mt-32 max-w-md text-4xl font-semibold tracking-tight text-black/85">
-                            {selectedProperty.logement.type_logement.nom_type}
-                          </div>
-                          <div className="mt-2 text-black/60">{selectedProperty.ref}</div>
-                        </div>
-                      )}
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="space-y-6 min-w-0">
+                    <div className="group relative overflow-hidden rounded-2xl border border-[var(--border)] bg-slate-100 shadow-sm w-full">
+                      <div className="aspect-[16/9] w-full md:aspect-[21/9]">
+                        {selectedProperty.logement.images?.[0] ? (
+                          <img
+                            src={selectedProperty.logement.images[0]}
+                            alt={selectedProperty.logement.adresse}
+                            className="h-full w-full cursor-pointer object-cover transition-transform duration-500 group-hover:scale-105"
+                            onClick={() => setPropertyImageViewer({ images: selectedProperty.logement.images ?? [], index: 0 })}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[var(--muted-foreground)]">No image available</div>
+                        )}
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute bottom-6 left-6 text-white pointer-events-none">
+                        <Badge variant={toneForStatus(selectedProperty.status)} className="mb-3">{selectedProperty.status}</Badge>
+                        <div className="text-3xl font-bold tracking-tight">{selectedProperty.logement.type_logement.nom_type}</div>
+                        <div className="mt-1 text-white/75">Ref: {selectedProperty.ref}</div>
+                      </div>
                     </div>
 
-                    {selectedProperty.logement.images && selectedProperty.logement.images.length > 1 ? (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {selectedProperty.logement.images.map((image, index) => (
+                    {selectedProperty.logement.images && selectedProperty.logement.images.length > 1 && (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {selectedProperty.logement.images.slice(1, 5).map((image, idx) => (
                           <button
-                            key={`${image}-${index}`}
-                            type="button"
-                            className="overflow-hidden rounded-2xl border border-black/8 bg-white transition hover:opacity-90"
-                            onClick={() =>
-                              setPropertyImageViewer({
-                                images: selectedProperty.logement.images ?? [],
-                                index,
-                              })
-                            }
+                            key={idx}
+                            className="relative aspect-square overflow-hidden rounded-xl border border-[var(--border)] shadow-sm transition hover:opacity-90"
+                            onClick={() => setPropertyImageViewer({ images: selectedProperty.logement.images ?? [], index: idx + 1 })}
                           >
-                            <img
-                              src={image}
-                              alt={`${selectedProperty.logement.adresse} image ${index + 1}`}
-                              className="h-28 w-full object-cover"
-                            />
+                            <img src={image} className="h-full w-full object-cover" alt="Property view" />
                           </button>
                         ))}
                       </div>
-                    ) : null}
+                    )}
 
-                    <div className="grid gap-0 overflow-hidden rounded-[28px] border border-black/6 bg-white md:grid-cols-3">
-                      <div className="border-b border-black/6 p-7 md:border-b-0 md:border-r">
-                        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Area</div>
-                        <div className="mt-4 text-[24px] font-semibold">{selectedProperty.logement.superficie} m²</div>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Area</div>
+                        <div className="mt-1 text-xl font-bold text-[var(--foreground)]">{selectedProperty.logement.superficie} <span className="text-sm font-medium text-[var(--muted-foreground)]">m²</span></div>
                       </div>
-                      <div className="border-b border-black/6 p-7 md:border-b-0 md:border-r">
-                        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Tenant</div>
-                        <div className="mt-4 text-[24px] font-semibold">{selectedProperty.tenantName ?? "Vacant"}</div>
+                      <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tenant</div>
+                        <div className="mt-1 text-xl font-bold text-[var(--foreground)] truncate">{selectedProperty.tenantName ?? "Vacant"}</div>
                       </div>
-                      <div className="p-7">
-                        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Status</div>
-                        <div className="mt-4">
+                      <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm sm:col-span-1 col-span-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Status</div>
+                        <div className="mt-2">
                           <Badge variant={toneForStatus(selectedProperty.status)}>{selectedProperty.status}</Badge>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">House information</div>
+                    <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--foreground)]">House Information</h3>
                       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {[
                           { label: "Bedrooms", value: selectedProperty.logement.chambres ?? "Not set", icon: BedDouble },
@@ -1334,37 +1306,37 @@ export function AgentWorkspace({
                           { label: "Floor", value: selectedProperty.logement.etage ?? "Not set", icon: Layers3 },
                           { label: "Heating", value: selectedProperty.logement.chauffage ?? "Not set", icon: Flame },
                           { label: "Area", value: `${selectedProperty.logement.superficie} m²`, icon: Ruler },
-                          { label: "Parking", value: selectedProperty.logement.parking ? "Included" : "Not included", icon: CarFront },
+                          { label: "Parking", value: selectedProperty.logement.parking ? "Included" : "None", icon: CarFront },
                         ].map((item) => (
-                          <div key={item.label} className="rounded-2xl bg-[#f6f6f4] p-4">
-                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
+                          <div key={item.label} className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-slate-50/50 p-4">
+                            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                               <item.icon className="h-4 w-4 text-[var(--primary)]" />
                               {item.label}
                             </div>
-                            <div className="mt-2 font-semibold">{item.value}</div>
+                            <div className="text-sm font-semibold text-[var(--foreground)]">{item.value}</div>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-5 rounded-2xl bg-[#f6f6f4] p-4">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Description</div>
-                        <p className="mt-2 leading-7 text-black/65">
-                          {selectedProperty.logement.description || "No detailed description has been added yet."}
+
+                      <div className="mt-6 rounded-xl border border-[var(--border)] bg-slate-50/50 p-5">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Description</div>
+                        <p className="mt-2 text-sm leading-relaxed text-[var(--foreground)]">
+                          {selectedProperty.logement.description || "No detailed description provided for this property."}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="rounded-[28px] bg-black p-7 text-white">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">Monthly Rent</div>
-                      <div className="mt-4 text-[54px] font-semibold tracking-tight">
+                  <div className="space-y-6 min-w-0">
+                    <div className="rounded-2xl border border-[var(--border)] bg-slate-900 p-6 shadow-lg text-white">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Monthly Rent</div>
+                      <div className="mt-2 text-4xl font-bold tracking-tight">
                         {formatMoney(selectedProperty.logement.loyer)}
-                        <span className="ml-2 text-[22px] text-white/65">MAD</span>
+                        <span className="ml-2 text-lg font-medium text-white/60">MAD</span>
                       </div>
                       <div className="mt-6 space-y-3">
                         <Button
-                          variant="secondary"
-                          className="w-full rounded-2xl"
+                          className="w-full justify-center bg-white text-[var(--primary)] hover:bg-slate-100 rounded-xl"
                           disabled={!selectedProperty.activeContract}
                           onClick={() => {
                             openTab("payments");
@@ -1373,62 +1345,56 @@ export function AgentWorkspace({
                               contrat_id: String(selectedProperty.activeContract?.id ?? ""),
                               montant: selectedProperty.activeContract?.montant ?? current.montant,
                             }));
+                            setPaymentWizardOpen(true);
                           }}
                         >
-                          Collect Payment
+                          <CreditCard className="mr-2 h-4 w-4" /> Collect Payment
                         </Button>
                         <Button
                           variant="outline"
-                          className="w-full rounded-2xl border-white/15 bg-transparent text-white hover:bg-white/10"
+                          className="w-full justify-center border-white/20 bg-transparent text-white hover:bg-white/10 rounded-xl"
                           onClick={() => handleInvoice(selectedProperty)}
                         >
-                          Generate Invoice
+                          <FileText className="mr-2 h-4 w-4" /> Generate Invoice
                         </Button>
                       </div>
                     </div>
 
-                    <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Contract</div>
+                    <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-4">Contract Details</div>
                       {selectedProperty.activeContract ?? selectedProperty.latestContract ? (
-                        <div className="mt-6 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-black/55">Tenant</span>
-                            <span className="font-semibold">{selectedProperty.tenantName}</span>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                            <span className="text-[var(--muted-foreground)]">Tenant</span>
+                            <span className="font-semibold text-[var(--foreground)]">{selectedProperty.tenantName}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-black/55">Start</span>
-                            <span className="font-semibold">
-                              {formatLongDate((selectedProperty.activeContract ?? selectedProperty.latestContract)?.date_debut ?? null)}
-                            </span>
+                          <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                            <span className="text-[var(--muted-foreground)]">Starts</span>
+                            <span className="font-semibold text-[var(--foreground)]">{formatShortDate((selectedProperty.activeContract ?? selectedProperty.latestContract)?.date_debut ?? null)}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-black/55">End</span>
-                            <span className="font-semibold">
-                              {formatLongDate((selectedProperty.activeContract ?? selectedProperty.latestContract)?.date_fin ?? null, "Open")}
-                            </span>
+                          <div className="flex justify-between pb-2">
+                            <span className="text-[var(--muted-foreground)]">Ends</span>
+                            <span className="font-semibold text-[var(--foreground)]">{formatShortDate((selectedProperty.activeContract ?? selectedProperty.latestContract)?.date_fin ?? null, "Open")}</span>
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-6 text-sm text-black/50">No contract attached.</div>
+                        <div className="rounded-xl bg-slate-50 p-4 text-center text-sm text-[var(--muted-foreground)]">No contract attached.</div>
                       )}
                     </div>
 
-                    <div className="rounded-[28px] border border-black/6 bg-white p-7">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-black/35">Tenant Contact</div>
-                      <div className="mt-6 text-2xl font-semibold">{selectedProperty.tenantName ?? "No active tenant"}</div>
-                      <div className="mt-2 text-black/50">
-                        {(selectedProperty.activeContract ?? selectedProperty.latestContract)?.locataire.user.email ?? "No email"}
+                    <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tenant Contact</div>
+                      <div className="mt-4 text-xl font-bold text-[var(--foreground)]">{selectedProperty.tenantName ?? "No active tenant"}</div>
+                      <div className="mt-1 text-sm text-[var(--muted-foreground)]">
+                        {(selectedProperty.activeContract ?? selectedProperty.latestContract)?.locataire.user.email ?? "No email available"}
                       </div>
                       {(selectedProperty.activeContract ?? selectedProperty.latestContract)?.locataire.user.email ? (
                         <Button
                           variant="outline"
-                          className="mt-6 w-full rounded-2xl"
-                          onClick={() => {
-                            window.location.href = `mailto:${(selectedProperty.activeContract ?? selectedProperty.latestContract)?.locataire.user.email}`;
-                          }}
+                          className="mt-5 w-full rounded-xl"
+                          onClick={() => { window.location.href = `mailto:${(selectedProperty.activeContract ?? selectedProperty.latestContract)?.locataire.user.email}`; }}
                         >
-                          <Mail className="h-4 w-4" />
-                          Email tenant
+                          <Mail className="mr-2 h-4 w-4" /> Email tenant
                         </Button>
                       ) : null}
                     </div>
@@ -1437,18 +1403,22 @@ export function AgentWorkspace({
               </section>
             ) : null}
 
+          {/* ── CONTRACTS TAB ── */}
             {activeTab === "contracts" ? (
-              <section className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-[28px] font-semibold tracking-tight">Contracts</h1>
-                  <Button className="rounded-2xl" onClick={openContractWizard}>
-                    <Plus className="h-4 w-4" />
-                    Create contract
+              <section className="space-y-6">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">Contracts</h1>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">Manage {filteredContracts.length} lease agreements.</p>
+                  </div>
+                  <Button className="w-full sm:w-auto rounded-xl shadow-sm" onClick={openContractWizard}>
+                    <Plus className="mr-2 h-4 w-4" /> Create contract
                   </Button>
                 </div>
-                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
+
+                <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm w-full">
                   <div className="min-w-[980px]">
-                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
+                    <div className="grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_110px_56px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                       <div>ID</div>
                       <div>Property</div>
                       <div>Tenant</div>
@@ -1460,1066 +1430,1087 @@ export function AgentWorkspace({
                     {filteredContracts.map((contrat) => (
                       <div
                         key={contrat.id}
-                        className="grid grid-cols-[100px_minmax(0,1fr)_1fr_140px_140px_110px_56px] gap-4 border-t border-black/6 px-7 py-4"
+                        className="group grid grid-cols-[100px_minmax(0,1fr)_1fr_130px_130px_110px_56px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm transition-colors hover:bg-slate-50/80 last:border-b-0"
                       >
-                      <div className="self-center text-black/60">IF-{String(contrat.id).padStart(4, "0")}</div>
-                      <div className="self-center">{contrat.logement.adresse}</div>
-                      <div className="self-center">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={contrat.locataire.user.avatar_url ?? undefined} alt={contrat.locataire.user.name} />
-                            <AvatarFallback>{initials(contrat.locataire.user.name)}</AvatarFallback>
+                        <div className="font-mono text-[var(--muted-foreground)]">IF-{String(contrat.id).padStart(4, "0")}</div>
+                        <div className="truncate text-[var(--foreground)] font-medium">{contrat.logement.adresse}</div>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar className="h-8 w-8 shrink-0 border border-[var(--border)]">
+                            <AvatarImage src={contrat.locataire.user.avatar_url ?? undefined} />
+                            <AvatarFallback className="text-[10px]">{initials(contrat.locataire.user.name)}</AvatarFallback>
                           </Avatar>
-                          <span>{contrat.locataire.user.name}</span>
+                          <span className="truncate text-[var(--foreground)]">{contrat.locataire.user.name}</span>
+                        </div>
+                        <div className="font-medium text-[var(--foreground)]">{formatMoney(contrat.montant)} MAD</div>
+                        <div><Badge variant={toneForStatus(contrat.statut)}>{contrat.statut}</Badge></div>
+                        <div><Badge variant={toneForStatus(contrat.signature_status)}>{contrat.signature_status}</Badge></div>
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm hover:bg-slate-50 hover:text-[var(--foreground)]">
+                                <Ellipsis className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                              <DropdownMenuItem onClick={() => setContractDetails(contrat)}>
+                                <Eye className="mr-2 h-4 w-4 text-[var(--muted-foreground)]" /> Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => beginEditContract(contrat)}>
+                                <PencilLine className="mr-2 h-4 w-4 text-blue-600" /> Edit
+                              </DropdownMenuItem>
+                              
+                              {/* ADDED DOWNLOAD BUTTON HERE */}
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  const property = logements.find((entry) => entry.id === contrat.logement.id) ?? null;
+                                  downloadContractPdf(contrat, property);
+                                }}
+                              >
+                                <FileDown className="mr-2 h-4 w-4 text-emerald-600" /> Download PDF
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => void handleDeleteContract(contrat)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-                      <div className="self-center">{formatMoney(contrat.montant)} MAD</div>
-                      <div className="self-center">
-                        <Badge variant={toneForStatus(contrat.statut)}>{contrat.statut}</Badge>
-                      </div>
-                      <div className="self-center">
-                        <Badge variant={toneForStatus(contrat.signature_status)}>{contrat.signature_status}</Badge>
-                      </div>
-                      <div className="flex items-center justify-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Contract actions"
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
-                            >
-                              <Ellipsis className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem className="text-gray-600" onClick={() => setContractDetails(contrat)}>
-                              <Eye className="h-4 w-4 text-gray-500" />
-                              Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-blue-700" onClick={() => beginEditContract(contrat)}>
-                              <PencilLine className="h-4 w-4 text-blue-600" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-700 focus:text-red-700"
-                              onClick={() => void handleDeleteContract(contrat)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </div>
               </section>
             ) : null}
 
+          {/* ── PAYMENTS TAB ── */}
             {activeTab === "payments" ? (
-              <section className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-[28px] font-semibold tracking-tight">Payments</h1>
-                  <Button className="rounded-2xl" onClick={openPaymentWizard}>
-                    <Plus className="h-4 w-4" />
-                    Record payment
-                  </Button>
-                </div>
-                <div className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
-                  <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                      <div>ID</div>
-                      <div>Tenant</div>
-                      <div>Amount</div>
-                      <div>Date</div>
-                      <div>Status</div>
-                    </div>
-                    {filteredPayments.map((paiement) => (
-                      <div
-                        key={paiement.id}
-                        className="grid grid-cols-[100px_minmax(0,1fr)_160px_140px_140px] gap-4 border-t border-black/6 px-7 py-4"
-                      >
-                      <div className="self-center text-black/60">PM-{String(paiement.id).padStart(4, "0")}</div>
-                      <div className="self-center">{paiement.contrat.locataire.user.name}</div>
-                      <div className="self-center">{formatMoney(paiement.montant)} MAD</div>
-                      <div className="self-center">{formatShortDate(paiement.date_paiement)}</div>
-                      <div className="self-center">
-                        <Badge variant={toneForStatus(paiement.statut)}>{paiement.statut}</Badge>
-                      </div>
-                    </div>
-                  ))}
-                  </div>
-                </div>
-              </section>
-            ) : null}
-
-            {activeTab === "notifications" ? (
-              <NotificationsPanel
-                token={token}
-                user={user}
-                users={users}
-              />
-            ) : null}
-
-            {activeTab === "profile" ? (
-              <ProfilePanel token={token} user={user} onSaved={reload} />
-            ) : null}
-
-            {activeTab === "tenants" ? (
-              <section className="overflow-x-auto rounded-[24px] border border-black/6 bg-white">
-                <div className="min-w-[920px]">
-                  <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] gap-4 bg-[#f6f6f4] px-7 py-5 text-xs font-semibold uppercase tracking-[0.22em] text-black/35">
-                    <div>Tenant</div>
-                    <div>Email</div>
-                    <div>Active Property</div>
-                    <div>Contract</div>
-                    <div>Actions</div>
-                  </div>
-                  {filteredTenantUsers.map((entry) => {
-                  const tenantContract =
-                    contrats.find((contrat) => contrat.locataire.user.id === entry.id) ?? null;
-
-                  return (
-                    <div
-                      key={entry.id}
-                      className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] gap-4 border-t border-black/6 px-7 py-5"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-11 w-11">
-                          <AvatarImage src={entry.avatar_url ?? undefined} alt={entry.name} />
-                          <AvatarFallback>{initials(entry.name)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-semibold">{entry.name}</div>
-                          <div className="text-sm text-black/45">{entry.phone ?? "No phone"}</div>
-                        </div>
-                      </div>
-                      <div className="self-center">{entry.email}</div>
-                      <div className="self-center">{tenantContract?.logement.adresse ?? "None"}</div>
-                      <div className="self-center">
-                        <Badge variant={toneForStatus(tenantContract?.signature_status ?? "pending")}>
-                          {tenantContract?.signature_status ?? "none"}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Tenant actions"
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/8 bg-white text-black/50 transition hover:text-black"
-                            >
-                              <Ellipsis className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="text-gray-600" onClick={() => setTenantDetails(entry)}>
-                              <Eye className="h-4 w-4 text-gray-500" />
-                              Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-blue-700"
-                              onClick={() => {
-                                openTab("notifications");
-                              }}
-                            >
-                              <Mail className="h-4 w-4 text-blue-600" />
-                              Contact
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  );
-                })}
-                </div>
-              </section>
-            ) : null}
-          </div>
-        </main>
-        <Dialog open={contractWizardOpen} onOpenChange={setContractWizardOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[720px]">
-            <DialogHeader className="border-b border-black/8 px-6 py-4">
-              <DialogTitle className="text-[22px]">{editingContractId ? "Edit contract" : "Create contract"}</DialogTitle>
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                Step {contractWizardStep + 1} of 2
-              </div>
-            </DialogHeader>
-
-            <div className="h-1 bg-black/8">
-              <div
-                className="h-full bg-[var(--primary)] transition-all duration-300"
-                style={{ width: `${((contractWizardStep + 1) / 2) * 100}%` }}
-              />
-            </div>
-
-            <div className="space-y-4 px-6 py-6">
-              {contractWizardStep === 0 ? (
-                <>
-                  <div className="space-y-2">
-                    <Label>Tenant</Label>
-                    <select
-                      className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                      value={contratForm.locataire_id}
-                      onChange={(event) => {
-                        const tenantId = event.target.value;
-                        const tenantContract = contrats.find((contrat) => String(contrat.locataire.id) === tenantId);
-                        setContratForm((current) => ({
-                          ...current,
-                          locataire_id: tenantId,
-                          logement_id: tenantContract ? String(tenantContract.logement.id) : "",
-                          montant: tenantContract?.montant ?? current.montant,
-                          statut: tenantContract?.statut ?? current.statut,
-                        }));
-                      }}
-                    >
-                      <option value="">Select tenant</option>
-                      {tenantUsers.map((entry) => (
-                        <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
-                          {entry.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Property</Label>
-                    <select
-                      className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                      value={contratForm.logement_id}
-                      onChange={(event) => {
-                        const selected = logements.find((entry) => String(entry.id) === event.target.value);
-                        setContratForm((current) => ({
-                          ...current,
-                          logement_id: event.target.value,
-                          montant: selected?.loyer ?? current.montant,
-                          statut: selected ? "active" : current.statut,
-                        }));
-                      }}
-                    >
-                      <option value="">Select property</option>
-                      {contractPropertyOptions.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
-                          {entry.adresse}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Start date</Label>
-                      <Input
-                        type="date"
-                        value={contratForm.date_debut}
-                        onChange={(event) =>
-                          setContratForm((current) => ({ ...current, date_debut: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>End date</Label>
-                      <Input
-                        type="date"
-                        value={contratForm.date_fin}
-                        onChange={(event) =>
-                          setContratForm((current) => ({ ...current, date_fin: event.target.value }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        value={contratForm.montant}
-                        onChange={(event) =>
-                          setContratForm((current) => ({ ...current, montant: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={contratForm.statut}
-                        onChange={(event) =>
-                          setContratForm((current) => ({ ...current, statut: event.target.value }))
-                        }
-                      >
-                        <option value="active">Active</option>
-                        <option value="pending">Pending</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="rounded-[20px] bg-[#f6f6f4] p-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Contract information</div>
-                    <div className="mt-4 space-y-3 text-sm">
-                      <div className="flex justify-between gap-4">
-                        <span className="text-black/45">Tenant</span>
-                        <span className="text-right font-semibold">{selectedContractTenant?.name ?? "Not selected"}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-black/45">Property</span>
-                        <span className="text-right font-semibold">{selectedContractProperty?.adresse ?? "Not selected"}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-black/45">Rent</span>
-                        <span className="text-right font-semibold">
-                          {selectedContractProperty ? `${formatMoney(selectedContractProperty.loyer)} MAD` : "Not selected"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="flex items-center justify-between gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="rounded-2xl"
-                  disabled={contractWizardStep === 0 || busy}
-                  onClick={() => setContractWizardStep(0)}
-                >
-                  Back
-                </Button>
-                {contractWizardStep === 0 ? (
-                  <Button
-                    className="rounded-2xl"
-                    disabled={!contratForm.locataire_id || !contratForm.logement_id || busy}
-                    onClick={() => setContractWizardStep(1)}
-                  >
-                    Continue
-                  </Button>
-                ) : (
-                  <Button
-                    className="rounded-2xl"
-                    disabled={!contratForm.date_debut || !contratForm.montant || busy}
-                    onClick={() => void handleContractSubmit()}
-                  >
-                    {editingContractId ? "Save contract" : "Create contract"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={Boolean(contractDetails)} onOpenChange={(open) => !open && setContractDetails(null)}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[640px]">
-            <DialogHeader className="border-b border-black/8 px-6 py-4">
-              <DialogTitle className="text-[22px]">Contract details</DialogTitle>
-            </DialogHeader>
-            {contractDetails ? (
-              <div className="space-y-5 px-6 py-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl bg-[#f6f6f4] p-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Tenant</div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={contractDetails.locataire.user.avatar_url ?? undefined} alt={contractDetails.locataire.user.name} />
-                        <AvatarFallback>{initials(contractDetails.locataire.user.name)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-semibold">{contractDetails.locataire.user.name}</div>
-                        <div className="text-sm text-black/50">{contractDetails.locataire.user.email}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-[#f6f6f4] p-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Agent</div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={contractDetails.agent.user.avatar_url ?? undefined} alt={contractDetails.agent.user.name} />
-                        <AvatarFallback>{initials(contractDetails.agent.user.name)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-semibold">{contractDetails.agent.user.name}</div>
-                        <div className="text-sm text-black/50">{contractDetails.agent.user.email}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-black/8 bg-white p-4">
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Contract ref</span>
-                      <span className="font-semibold">IF-{String(contractDetails.id).padStart(4, "0")}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Property</span>
-                      <span className="font-semibold">{contractDetails.logement.adresse}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Amount</span>
-                      <span className="font-semibold">{formatMoney(contractDetails.montant)} MAD</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Start</span>
-                      <span className="font-semibold">{formatLongDate(contractDetails.date_debut)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">End</span>
-                      <span className="font-semibold">{formatLongDate(contractDetails.date_fin, "Open")}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Status</span>
-                      <Badge variant={toneForStatus(contractDetails.statut)}>{contractDetails.statut}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Signature</span>
-                      <Badge variant={toneForStatus(contractDetails.signature_status)}>{contractDetails.signature_status}</Badge>
-                    </div>
-                    {contractDetails.signed_at ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-black/50">Signed at</span>
-                        <span className="font-semibold">{formatLongDate(contractDetails.signed_at)}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                {contractDetails.signature_data ? (
-                  <div className="rounded-2xl bg-[#f6f6f4] p-4">
-                    <div className="mb-2 text-sm font-semibold text-black/60">Tenant signature</div>
-                    <img src={contractDetails.signature_data} alt="Tenant signature" className="h-24 rounded-xl border border-black/8 bg-white object-contain p-2" />
-                  </div>
-                ) : null}
-
-                <Button
-                  className="w-full rounded-2xl"
-                  onClick={() => {
-                    const property = logements.find((entry) => entry.id === contractDetails.logement.id) ?? null;
-                    downloadContractPdf(contractDetails, property);
-                  }}
-                >
-                  <FileDown className="h-4 w-4" />
-                  Download contract PDF
-                </Button>
-              </div>
-            ) : null}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={Boolean(tenantDetails)} onOpenChange={(open) => !open && setTenantDetails(null)}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[640px]">
-            <DialogHeader className="border-b border-black/8 px-6 py-4">
-              <DialogTitle className="text-[22px]">Tenant details</DialogTitle>
-            </DialogHeader>
-            {tenantDetails ? (
-              <div className="space-y-5 px-6 py-6">
-                <div className="rounded-2xl bg-[#f6f6f4] p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={tenantDetails.avatar_url ?? undefined} alt={tenantDetails.name} />
-                      <AvatarFallback>{initials(tenantDetails.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-semibold">{tenantDetails.name}</div>
-                      <div className="text-sm text-black/50">{tenantDetails.email}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-black/8 bg-white p-4">
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Phone</span>
-                      <span className="font-semibold">{tenantDetails.phone ?? "No phone"}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Role</span>
-                      <span className="font-semibold">{tenantDetails.role}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Status</span>
-                      <Badge variant={toneForStatus(tenantDetails.status)}>{tenantDetails.status}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Active property</span>
-                      <span className="font-semibold">{tenantDetailsContract?.logement.adresse ?? "None"}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Contract signature</span>
-                      <Badge variant={toneForStatus(tenantDetailsContract?.signature_status ?? "pending")}>
-                        {tenantDetailsContract?.signature_status ?? "none"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50">Last login</span>
-                      <span className="font-semibold">{formatLongDate(tenantDetails.last_login_at, "Never")}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-[#f6f6f4] p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">Payments summary</div>
-                  <div className="mt-3 text-sm text-black/70">
-                    {tenantDetailsPayments.length} payment{tenantDetailsPayments.length === 1 ? "" : "s"} recorded
-                  </div>
-                  <div className="mt-1 text-sm font-semibold">
-                    Total: {formatMoney(tenantDetailsPayments.reduce((total, entry) => total + Number.parseFloat(entry.montant || "0"), 0))} MAD
-                  </div>
-                </div>
-
-                <Button
-                  className="w-full rounded-2xl"
-                  onClick={() => {
-                    openTab("notifications");
-                  }}
-                >
-                  <Mail className="h-4 w-4" />
-                  Contact tenant
-                </Button>
-              </div>
-            ) : null}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={Boolean(propertyImageViewer)} onOpenChange={(open) => !open && setPropertyImageViewer(null)}>
-          <DialogContent className="overflow-hidden rounded-3xl p-0 sm:max-w-[980px]">
-            {propertyImageViewer ? (
-              <div className="bg-black">
-                <div className="relative">
-                  <img
-                    src={propertyImageViewer.images[propertyImageViewer.index]}
-                    alt={`Property image ${propertyImageViewer.index + 1}`}
-                    className="h-[68vh] w-full object-contain"
-                  />
-                  {propertyImageViewer.images.length > 1 ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border-white/30 bg-black/45 text-white hover:bg-black/65"
-                        onClick={() =>
-                          setPropertyImageViewer((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  index: (current.index - 1 + current.images.length) % current.images.length,
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border-white/30 bg-black/45 text-white hover:bg-black/65"
-                        onClick={() =>
-                          setPropertyImageViewer((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  index: (current.index + 1) % current.images.length,
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-                <div className="px-4 py-3 text-center text-sm font-medium text-white/85">
-                  {propertyImageViewer.index + 1} / {propertyImageViewer.images.length}
-                </div>
-              </div>
-            ) : null}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={paymentWizardOpen} onOpenChange={setPaymentWizardOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl p-0 sm:max-w-[720px]">
-            <DialogHeader className="border-b border-black/8 px-6 py-4">
-              <DialogTitle className="text-[22px]">Record payment</DialogTitle>
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                Step {paymentWizardStep + 1} of 2
-              </div>
-            </DialogHeader>
-
-            <div className="h-1 bg-black/8">
-              <div
-                className="h-full bg-[var(--primary)] transition-all duration-300"
-                style={{ width: `${((paymentWizardStep + 1) / 2) * 100}%` }}
-              />
-            </div>
-
-            <div className="space-y-4 px-6 py-6">
-              {paymentWizardStep === 0 ? (
-                <>
-                  <div className="space-y-2">
-                    <Label>Contract</Label>
-                    <select
-                      className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                      value={paymentForm.contrat_id}
-                      onChange={(event) => {
-                        const selected = contrats.find((entry) => String(entry.id) === event.target.value);
-                        setPaymentForm((current) => ({
-                          ...current,
-                          contrat_id: event.target.value,
-                          montant: selected?.montant ?? current.montant,
-                          statut: "awaiting_tenant_approval",
-                        }));
-                      }}
-                    >
-                      <option value="">Select contract</option>
-                      {contrats.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
-                          {entry.logement.adresse} • {entry.locataire.user.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        value={paymentForm.montant}
-                        onChange={(event) =>
-                          setPaymentForm((current) => ({ ...current, montant: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Date</Label>
-                      <Input
-                        type="date"
-                        value={paymentForm.date_paiement}
-                        onChange={(event) =>
-                          setPaymentForm((current) => ({
-                            ...current,
-                            date_paiement: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Mode</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={paymentForm.mode}
-                        onChange={(event) =>
-                          setPaymentForm((current) => ({
-                            ...current,
-                            mode: event.target.value,
-                            statut: ["Virement", "Cash"].includes(event.target.value) ? "awaiting_tenant_approval" : current.statut,
-                          }))
-                        }
-                      >
-                        <option value="Virement">Virement</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Card">Card</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <select
-                        className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                        value={paymentForm.statut}
-                        onChange={(event) =>
-                          setPaymentForm((current) => ({ ...current, statut: event.target.value }))
-                        }
-                      >
-                        <option value="awaiting_tenant_approval">Needs tenant approval</option>
-                        <option value="pending">Pending</option>
-                        <option value="partial">Partial</option>
-                      </select>
-                    </div>
-                  </div>
-                  {paymentForm.mode === "Virement" ? (
-                    <div className="rounded-[20px] bg-[#f6f6f4] p-4">
-                      <div className="text-sm font-semibold">Bank transfer details</div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <Input
-                          value={paymentForm.rib}
-                          onChange={(event) => setPaymentForm((current) => ({ ...current, rib: event.target.value }))}
-                          placeholder="RIB / IBAN"
-                        />
-                        <Input
-                          value={paymentForm.reference}
-                          onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))}
-                          placeholder="Transfer reference"
-                        />
-                      </div>
-                      <div className="mt-3 text-xs text-black/50">
-                        The tenant will approve this confirmation after checking the transfer.
-                      </div>
-                    </div>
-                  ) : null}
-                  {paymentForm.mode === "Cash" ? (
-                    <div className="rounded-[20px] bg-[#f6f6f4] p-4">
-                      <div className="text-sm font-semibold">Cash handover note</div>
-                      <textarea
-                        className="mt-3 min-h-20 w-full rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                        value={paymentForm.cash_note}
-                        onChange={(event) => setPaymentForm((current) => ({ ...current, cash_note: event.target.value }))}
-                        placeholder="Who received the cash, location, receipt number..."
-                      />
-                    </div>
-                  ) : null}
-                  {selectedPaymentContract ? (
-                    <div className="rounded-[20px] border border-black/8 bg-white p-4 text-sm">
-                      <div className="font-semibold">{selectedPaymentContract.locataire.user.name}</div>
-                      <div className="mt-1 text-black/55">{selectedPaymentContract.logement.adresse}</div>
-                      <div className="mt-3 text-black/50">Expected rent: {formatMoney(selectedPaymentContract.montant)} MAD</div>
-                    </div>
-                  ) : null}
-                </>
-              )}
-
-              <div className="flex items-center justify-between gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="rounded-2xl"
-                  disabled={paymentWizardStep === 0 || busy}
-                  onClick={() => setPaymentWizardStep(0)}
-                >
-                  Back
-                </Button>
-                {paymentWizardStep === 0 ? (
-                  <Button
-                    className="rounded-2xl"
-                    disabled={!paymentForm.contrat_id || !paymentForm.montant || busy}
-                    onClick={() => setPaymentWizardStep(1)}
-                  >
-                    Continue
-                  </Button>
-                ) : (
-                  <Button
-                    className="rounded-2xl"
-                    disabled={busy}
-                    onClick={() => void handlePaymentSubmit()}
-                  >
-                    Record payment
-                  </Button>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-        {propertyWizardOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
-            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_28px_90px_rgba(0,0,0,0.28)]">
-              <div className="flex items-center justify-between border-b border-black/8 px-6 py-4">
-                <button
-                  type="button"
-                  className="rounded-full p-2 text-black/60 transition hover:bg-black/5"
-                  onClick={() => {
-                    setPropertyWizardOpen(false);
-                    resetPropertyEditor();
-                  }}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-                <div className="text-sm font-semibold text-black/55">
-                  Step {propertyWizardStep + 1} of 4
-                </div>
-              </div>
-
-              <div className="h-1 bg-black/8">
-                <div
-                  className="h-full bg-black transition-all duration-300"
-                  style={{ width: `${((propertyWizardStep + 1) / 4) * 100}%` }}
-                />
-              </div>
-
-              <div className="overflow-y-auto px-6 py-7">
-                {propertyWizardStep === 0 ? (
+              <section className="space-y-6">
+                {/* Removed max-width constraint to allow full width */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between w-full">
                   <div>
-                    <h2 className="text-[30px] font-semibold tracking-tight">What kind of property is it?</h2>
-                    <p className="mt-2 text-sm text-black/50">Choose one type. Agents should only pick from the saved platform list.</p>
-                    <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                      {types.map((entry) => (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          onClick={() => setPropertyForm((current) => ({ ...current, type_logement_id: String(entry.id) }))}
-                          className={`rounded-[20px] border px-5 py-5 text-left transition ${
-                            propertyForm.type_logement_id === String(entry.id)
-                              ? "border-black bg-black text-white shadow-[0_18px_45px_rgba(0,0,0,0.18)]"
-                              : "border-black/10 bg-white hover:border-black/25 hover:bg-[#f6f6f4]"
-                          }`}
-                        >
-                          <div className="text-lg font-semibold">{entry.nom_type}</div>
-                          <div className="mt-1 text-sm opacity-65">{formatMoney(entry.charge_forfaitaires)} MAD flat charges</div>
-                        </button>
-                      ))}
-                    </div>
+                    <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">Payments</h1>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">Track and record incoming rent collections.</p>
                   </div>
-                ) : null}
-
-                {propertyWizardStep === 1 ? (
-                  <div>
-                    <h2 className="text-[30px] font-semibold tracking-tight">Add the commune</h2>
-                    <p className="mt-2 text-sm text-black/50">No dropdown here. Add the commune information and it will be saved before the property is created.</p>
-                    <div className="mt-7 grid gap-4 rounded-[24px] border border-black/8 bg-[#fbfbfa] p-5 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>Commune name</Label>
-                        <Input
-                          value={communeDraft.nom}
-                          onChange={(event) => {
-                            setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                            setCommuneDraft((current) => ({ ...current, nom: event.target.value }));
-                          }}
-                          placeholder="Hay Riad, Agdal, Temara..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Population</Label>
-                        <Input
-                          type="number"
-                          value={communeDraft.nombre_habitants}
-                          onChange={(event) => {
-                            setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                            setCommuneDraft((current) => ({ ...current, nombre_habitants: event.target.value }));
-                          }}
-                          placeholder="85000"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Distance to agency</Label>
-                        <Input
-                          type="number"
-                          value={communeDraft.distance_agence}
-                          onChange={(event) => {
-                            setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                            setCommuneDraft((current) => ({ ...current, distance_agence: event.target.value }));
-                          }}
-                          placeholder="3.5"
-                        />
-                      </div>
-                    </div>
-                    {communes.length > 0 ? (
-                        <div className="mt-6 rounded-[20px] bg-[#f6f6f4] p-4 text-sm text-black/55">
-                          Add the commune once here. The platform saves it and reuses it automatically later.
-                        </div>
-                    ) : null}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button className="w-full sm:w-auto rounded-xl shadow-sm" onClick={openPaymentWizard}>
+                      <Plus className="mr-2 h-4 w-4" /> Record Payment
+                    </Button>
                   </div>
-                ) : null}
+                </div>
 
-                {propertyWizardStep === 2 ? (
-                  <div>
-                    <h2 className="text-[30px] font-semibold tracking-tight">Describe the house</h2>
-                    <p className="mt-2 text-sm text-black/50">Add the information tenants and admins need to understand the listing.</p>
-                    <div className="mt-7 grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>Address</Label>
-                        <Input value={propertyForm.adresse} onChange={(event) => setPropertyForm((current) => ({ ...current, adresse: event.target.value }))} />
+                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm w-full">
+                  <div className="w-full overflow-x-auto hide-scrollbar">
+                    
+                    {/* Full width responsive grid */}
+                    <div className="min-w-[900px]">
+                      <div className="grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_180px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                        <div>ID</div>
+                        <div>Tenant</div>
+                        <div>Agent</div>
+                        <div>Amount</div>
+                        <div>Date</div>
+                        <div>Status</div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Title</Label>
-                        <Input value={propertyForm.titre} onChange={(event) => setPropertyForm((current) => ({ ...current, titre: event.target.value }))} placeholder="Modern studio near Agdal" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Publication status</Label>
-                        <select className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4" value={propertyForm.statut_publication} onChange={(event) => setPropertyForm((current) => ({ ...current, statut_publication: event.target.value }))}>
-                          <option value="listed">Listed</option>
-                          <option value="draft">Draft</option>
-                          <option value="maintenance">Maintenance</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>Description</Label>
-                        <textarea className="min-h-28 w-full rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]" value={propertyForm.description} onChange={(event) => setPropertyForm((current) => ({ ...current, description: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Area</Label>
-                        <Input type="number" value={propertyForm.superficie} onChange={(event) => setPropertyForm((current) => ({ ...current, superficie: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Rent</Label>
-                        <Input type="number" value={propertyForm.loyer} onChange={(event) => setPropertyForm((current) => ({ ...current, loyer: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Bedrooms</Label>
-                        <Input type="number" value={propertyForm.chambres} onChange={(event) => setPropertyForm((current) => ({ ...current, chambres: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Bathrooms</Label>
-                        <Input type="number" value={propertyForm.salles_bain} onChange={(event) => setPropertyForm((current) => ({ ...current, salles_bain: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Floor</Label>
-                        <Input value={propertyForm.etage} onChange={(event) => setPropertyForm((current) => ({ ...current, etage: event.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Heating</Label>
-                        <Input value={propertyForm.chauffage} onChange={(event) => setPropertyForm((current) => ({ ...current, chauffage: event.target.value }))} placeholder="Electric" />
-                      </div>
-                      <label className="flex h-12 items-center gap-3 rounded-2xl border border-black/8 bg-white px-4 text-sm">
-                        <input type="checkbox" checked={propertyForm.parking} onChange={(event) => setPropertyForm((current) => ({ ...current, parking: event.target.checked }))} />
-                        Parking included
-                      </label>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>Attach tenant to this house</Label>
-                        <select
-                          className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                          value={propertyForm.locataire_id}
-                          onChange={(event) => setPropertyForm((current) => ({ ...current, locataire_id: event.target.value }))}
-                        >
-                          <option value="">Keep property vacant</option>
-                          {tenantUsers.map((entry) => (
-                            <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
-                              {entry.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {propertyForm.locataire_id ? (
-                        <div className="grid gap-4 rounded-[20px] bg-[#f6f6f4] p-4 sm:col-span-2 sm:grid-cols-3">
-                          <div className="space-y-2">
-                            <Label>Contract start</Label>
-                            <Input
-                              type="date"
-                              value={propertyForm.contrat_date_debut}
-                              onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_debut: event.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Contract end</Label>
-                            <Input
-                              type="date"
-                              value={propertyForm.contrat_date_fin}
-                              onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_fin: event.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Status</Label>
-                            <select
-                              className="h-12 w-full rounded-2xl border border-black/8 bg-white px-4"
-                              value={propertyForm.contrat_statut}
-                              onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_statut: event.target.value }))}
-                            >
-                              <option value="active">Active</option>
-                              <option value="pending">Pending</option>
-                            </select>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
 
-                {propertyWizardStep === 3 ? (
-                  <div>
-                    <h2 className="text-[30px] font-semibold tracking-tight">Add photos</h2>
-                    <p className="mt-2 text-sm text-black/50">Photos are uploaded to Laravel and saved in the property record.</p>
-                    <div className="mt-2 text-sm font-medium text-black/65">
-                      {totalPropertyImageCount}/10 images selected (minimum 2)
-                    </div>
-                    <label className="mt-7 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-black/15 bg-[#fbfbfa] px-5 py-8 text-center transition hover:bg-[#f6f6f4]">
-                      <UploadCloud className="h-8 w-8 text-black/45" />
-                      <span className="mt-3 text-base font-semibold">Upload property photos</span>
-                      <span className="mt-1 text-sm text-black/45">Large JPG, PNG, or WebP files are optimized automatically</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="sr-only"
-                        onChange={(event) => {
-                          const files = Array.from(event.currentTarget.files ?? []);
-                          event.currentTarget.value = "";
-                          void handlePropertyImagesChange(files);
-                        }}
-                      />
-                    </label>
-                    {preparingImages ? (
-                      <div className="mt-3 text-sm text-black/50">Preparing images for upload...</div>
-                    ) : null}
-                    {propertyExistingImages.length > 0 ? (
-                      <div className="mt-5">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-black/45">
-                          Existing images
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {propertyExistingImages.map((imageUrl, index) => (
-                            <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-black/8 bg-white">
-                              <img src={imageUrl} alt={`Property ${index + 1}`} className="h-28 w-full object-cover" />
-                              <div className="flex items-center justify-end px-3 py-2">
-                                <button
-                                  type="button"
-                                  className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-                                  onClick={() => removeExistingPropertyImage(index)}
-                                >
-                                  Remove
-                                </button>
+                      {filteredPayments.map((paiement) => {
+                        // FIX: Fetch agent directly from the contract relation, fallback to property agent
+                        const agentName = paiement.contrat?.agent?.user?.name || paiement.contrat?.logement?.agent?.user?.name || "Unassigned";
+                        const agentAvatar = paiement.contrat?.agent?.user?.avatar_url || paiement.contrat?.logement?.agent?.user?.avatar_url || undefined;
+
+                        return (
+                          <div
+                            key={paiement.id}
+                            className="group grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_180px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm transition-colors hover:bg-slate-50/50 last:border-b-0"
+                          >
+                            <div className="font-mono text-[var(--muted-foreground)]">
+                              PM-{String(paiement.id).padStart(4, "0")}
+                            </div>
+                            
+                            <div className="min-w-0 pr-4">
+                              <div className="truncate font-semibold text-[var(--foreground)]">
+                                {paiement.contrat?.locataire?.user?.name ?? "Unknown Tenant"}
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {propertyImageFiles.length > 0 ? (
-                      <div className="mt-5">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-black/45">
-                          New uploads
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {propertyImageFiles.map((file, index) => (
-                            <div key={`${file.name}-${file.size}-${file.lastModified}`} className="overflow-hidden rounded-2xl border border-black/8 bg-white">
-                            {propertyImagePreviewUrls[index] ? (
-                              <img src={propertyImagePreviewUrls[index]} alt={file.name} className="h-28 w-full object-cover" />
-                            ) : null}
-                            <div className="px-3 py-2 text-xs text-black/55">
-                              <div className="truncate">{file.name}</div>
-                              <div className="mt-0.5 text-black/35">{formatFileSize(file.size)}</div>
-                              <button
-                                type="button"
-                                className="mt-2 rounded-lg border border-red-200 px-2 py-1 font-semibold text-red-700 transition hover:bg-red-50"
-                                onClick={() => removeUploadedPropertyImage(index)}
-                              >
-                                Remove
-                              </button>
+
+                            {/* Fixed Agent rendering */}
+                            <div className="flex min-w-0 items-center gap-3 pr-4">
+                              <Avatar className="h-7 w-7 shrink-0 border border-[var(--border)]">
+                                <AvatarImage src={agentAvatar} />
+                                <AvatarFallback className="text-[10px]">{initials(agentName)}</AvatarFallback>
+                              </Avatar>
+                              <span className="truncate font-medium text-[var(--muted-foreground)]">
+                                {agentName}
+                              </span>
+                            </div>
+
+                            <div className="font-semibold text-[var(--foreground)]">
+                              {formatMoney(paiement.montant)} <span className="text-[10px] font-normal text-[var(--muted-foreground)]">MAD</span>
+                            </div>
+
+                            <div className="text-[var(--muted-foreground)]">
+                              {formatShortDate(paiement.date_paiement)}
+                            </div>
+
+                            <div>
+                              <Badge variant={toneForStatus(paiement.statut)} className="whitespace-nowrap truncate">
+                                {paiement.statut}
+                              </Badge>
                             </div>
                           </div>
-                          ))}
+                        );
+                      })}
+
+                      {filteredPayments.length === 0 && (
+                        <div className="px-6 py-8 text-center text-sm text-[var(--muted-foreground)]">
+                          No payments found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {/* ── TENANTS TAB ── */}
+            {activeTab === "tenants" ? (
+              <section className="space-y-6">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">Tenants</h1>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">Directory of all locataires linked to your properties.</p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm w-full">
+                  <div className="min-w-[920px]">
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                      <div>Tenant</div>
+                      <div>Email</div>
+                      <div>Active Property</div>
+                      <div>Contract</div>
+                      <div>Actions</div>
+                    </div>
+                    {filteredTenantUsers.map((entry) => {
+                      const tenantContract = contrats.find((contrat) => contrat.locataire.user.id === entry.id) ?? null;
+
+                      return (
+                        <div key={entry.id} className="grid grid-cols-[minmax(0,1.2fr)_1fr_180px_140px_140px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm last:border-b-0 hover:bg-slate-50/50 transition-colors">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Avatar className="h-10 w-10 shrink-0 border border-[var(--border)]">
+                              <AvatarImage src={entry.avatar_url ?? undefined} />
+                              <AvatarFallback>{initials(entry.name)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-[var(--foreground)]">{entry.name}</div>
+                              <div className="truncate text-xs text-[var(--muted-foreground)]">{entry.phone ?? "No phone"}</div>
+                            </div>
+                          </div>
+                          <div className="truncate text-[var(--muted-foreground)]">{entry.email}</div>
+                          <div className="truncate text-[var(--foreground)]">{tenantContract?.logement.adresse ?? "None"}</div>
+                          <div>
+                            <Badge variant={toneForStatus(tenantContract?.signature_status ?? "pending")}>
+                              {tenantContract?.signature_status ?? "none"}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-end pr-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm hover:bg-slate-50 hover:text-[var(--foreground)]">
+                                  <Ellipsis className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                                <DropdownMenuItem onClick={() => setTenantDetails(entry)}>
+                                  <Eye className="mr-2 h-4 w-4 text-[var(--muted-foreground)]" /> Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openTab("notifications")}>
+                                  <Mail className="mr-2 h-4 w-4 text-blue-600" /> Contact
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {/* ── NOTIFICATIONS & PROFILE TABS ── */}
+            {activeTab === "notifications" ? <NotificationsPanel token={token} user={user} users={users} /> : null}
+            {activeTab === "profile" ? <ProfilePanel token={token} user={user} onSaved={reload} /> : null}
+
+          </div>
+        </main>
+      </div>
+
+      {/* ── GLOBAL MODALS (RENDERED COMPLETELY OUTSIDE THE MAIN/GRID WRAPPER SO THEY DON'T GET CLIPPED OR DUPLICATED) ── */}
+
+      {/* Property Wizard Modal */}
+      <Dialog open={propertyWizardOpen} onOpenChange={setPropertyWizardOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px] w-[95vw]">
+          <DialogHeader className="flex flex-row items-center justify-between border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <div>
+              <DialogTitle className="text-xl font-bold">
+                {editingPropertyId ? "Edit Property" : "Create Property"}
+              </DialogTitle>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Step {propertyWizardStep + 1} of 4
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-full p-2 text-[var(--muted-foreground)] transition hover:bg-slate-200"
+              onClick={() => {
+                setPropertyWizardOpen(false);
+                resetPropertyEditor();
+              }}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </DialogHeader>
+
+          <div className="h-1 w-full bg-[var(--border)]">
+            <div
+              className="h-full bg-[var(--primary)] transition-all duration-300 ease-out"
+              style={{ width: `${((propertyWizardStep + 1) / 4) * 100}%` }}
+            />
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
+            {propertyWizardStep === 0 ? (
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">What kind of property is it?</h2>
+                <p className="mt-2 text-sm text-[var(--muted-foreground)]">Choose one type from the platform list.</p>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {types.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => setPropertyForm((current) => ({ ...current, type_logement_id: String(entry.id) }))}
+                      className={`rounded-2xl border p-5 text-left transition-all ${
+                        propertyForm.type_logement_id === String(entry.id)
+                          ? "border-[var(--primary)] bg-[var(--primary)] text-white shadow-md"
+                          : "border-[var(--border)] bg-white hover:border-[var(--primary)]/30 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="text-lg font-semibold">{entry.nom_type}</div>
+                      <div className={`mt-1 text-sm ${propertyForm.type_logement_id === String(entry.id) ? "text-white/80" : "text-[var(--muted-foreground)]"}`}>
+                        {formatMoney(entry.charge_forfaitaires)} MAD flat charges
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {propertyWizardStep === 1 ? (
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Add the commune</h2>
+                <p className="mt-2 text-sm text-[var(--muted-foreground)]">Add the commune information and it will be saved.</p>
+                <div className="mt-6 grid gap-5 rounded-2xl border border-[var(--border)] bg-slate-50/50 p-6 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Commune name</Label>
+                    <Input
+                      className="h-11 rounded-xl"
+                      value={communeDraft.nom}
+                      onChange={(event) => {
+                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
+                        setCommuneDraft((current) => ({ ...current, nom: event.target.value }));
+                      }}
+                      placeholder="Hay Riad, Agdal, Temara..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Population</Label>
+                    <Input
+                      className="h-11 rounded-xl"
+                      type="number"
+                      value={communeDraft.nombre_habitants}
+                      onChange={(event) => {
+                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
+                        setCommuneDraft((current) => ({ ...current, nombre_habitants: event.target.value }));
+                      }}
+                      placeholder="85000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Distance to agency (km)</Label>
+                    <Input
+                      className="h-11 rounded-xl"
+                      type="number"
+                      value={communeDraft.distance_agence}
+                      onChange={(event) => {
+                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
+                        setCommuneDraft((current) => ({ ...current, distance_agence: event.target.value }));
+                      }}
+                      placeholder="3.5"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {propertyWizardStep === 2 ? (
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Describe the house</h2>
+                <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Address</Label>
+                    <Input className="h-11 rounded-xl" value={propertyForm.adresse} onChange={(event) => setPropertyForm((current) => ({ ...current, adresse: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Title</Label>
+                    <Input className="h-11 rounded-xl" value={propertyForm.titre} onChange={(event) => setPropertyForm((current) => ({ ...current, titre: event.target.value }))} placeholder="Modern studio near Agdal" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Publication status</Label>
+                    <select className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10" value={propertyForm.statut_publication} onChange={(event) => setPropertyForm((current) => ({ ...current, statut_publication: event.target.value }))}>
+                      <option value="listed">Listed</option>
+                      <option value="draft">Draft</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Description</Label>
+                    <textarea className="min-h-[120px] w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10" value={propertyForm.description} onChange={(event) => setPropertyForm((current) => ({ ...current, description: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Area (m²)</Label>
+                    <Input className="h-11 rounded-xl" type="number" value={propertyForm.superficie} onChange={(event) => setPropertyForm((current) => ({ ...current, superficie: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Rent (MAD)</Label>
+                    <Input className="h-11 rounded-xl" type="number" value={propertyForm.loyer} onChange={(event) => setPropertyForm((current) => ({ ...current, loyer: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Bedrooms</Label>
+                    <Input className="h-11 rounded-xl" type="number" value={propertyForm.chambres} onChange={(event) => setPropertyForm((current) => ({ ...current, chambres: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Bathrooms</Label>
+                    <Input className="h-11 rounded-xl" type="number" value={propertyForm.salles_bain} onChange={(event) => setPropertyForm((current) => ({ ...current, salles_bain: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Floor</Label>
+                    <Input className="h-11 rounded-xl" value={propertyForm.etage} onChange={(event) => setPropertyForm((current) => ({ ...current, etage: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Heating</Label>
+                    <Input className="h-11 rounded-xl" value={propertyForm.chauffage} onChange={(event) => setPropertyForm((current) => ({ ...current, chauffage: event.target.value }))} placeholder="Electric" />
+                  </div>
+                  <label className="flex h-11 w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm shadow-sm">
+                    <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary)]" checked={propertyForm.parking} onChange={(event) => setPropertyForm((current) => ({ ...current, parking: event.target.checked }))} />
+                    Parking included
+                  </label>
+                  <div className="space-y-4 rounded-xl border border-[var(--border)] bg-slate-50/50 p-5 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Attach tenant to this house</Label>
+                    <select
+                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                      value={propertyForm.locataire_id}
+                      onChange={(event) => setPropertyForm((current) => ({ ...current, locataire_id: event.target.value }))}
+                    >
+                      <option value="">Keep property vacant</option>
+                      {tenantUsers.map((entry) => (
+                        <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>{entry.name}</option>
+                      ))}
+                    </select>
+                    {propertyForm.locataire_id ? (
+                      <div className="grid gap-4 sm:grid-cols-3 pt-2">
+                        <div className="space-y-2">
+                          <Label className="text-[11px] text-[var(--muted-foreground)]">Contract start</Label>
+                          <Input type="date" className="h-10 rounded-lg text-sm" value={propertyForm.contrat_date_debut} onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_debut: event.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[11px] text-[var(--muted-foreground)]">Contract end</Label>
+                          <Input type="date" className="h-10 rounded-lg text-sm" value={propertyForm.contrat_date_fin} onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_date_fin: event.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[11px] text-[var(--muted-foreground)]">Status</Label>
+                          <select className="h-10 w-full rounded-lg border border-[var(--border)] bg-white px-2 text-sm outline-none focus:border-[var(--primary)]" value={propertyForm.contrat_statut} onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_statut: event.target.value }))}>
+                            <option value="active">Active</option>
+                            <option value="pending">Pending</option>
+                          </select>
                         </div>
                       </div>
                     ) : null}
                   </div>
-                ) : null}
+                </div>
               </div>
+            ) : null}
 
-              <div className="flex items-center justify-between border-t border-black/8 px-6 py-4">
-                <Button variant="outline" className="rounded-2xl" disabled={propertyWizardStep === 0 || busy} onClick={() => setPropertyWizardStep((current) => Math.max(0, current - 1))}>
-                  Back
-                </Button>
-                {propertyWizardStep < 3 ? (
-                  <Button
-                    className="rounded-2xl"
-                    disabled={
-                      preparingImages ||
-                      (propertyWizardStep === 0 && !propertyForm.type_logement_id) ||
-                      (propertyWizardStep === 1 && !propertyForm.commune_id && !communeDraft.nom.trim()) ||
-                      (propertyWizardStep === 2 && (!propertyForm.adresse || !propertyForm.superficie || !propertyForm.loyer))
-                    }
-                    onClick={() => setPropertyWizardStep((current) => Math.min(3, current + 1))}
-                  >
-                    Continue
-                  </Button>
-                ) : (
-                  <Button className="rounded-2xl" disabled={busy || preparingImages || totalPropertyImageCount < 2 || totalPropertyImageCount > 10} onClick={() => void handlePropertySubmit()}>
-                    {editingPropertyId ? "Save property" : "Create property"}
-                  </Button>
+            {propertyWizardStep === 3 ? (
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Add photos</h2>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-sm text-[var(--muted-foreground)]">Photos are saved in the property record.</p>
+                  <span className="text-xs font-semibold text-[var(--primary)]">{totalPropertyImageCount}/10 images (min 2)</span>
+                </div>
+                
+                <label className="mt-6 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border-strong)] bg-slate-50/50 px-5 py-8 text-center transition hover:bg-slate-100">
+                  <UploadCloud className="h-8 w-8 text-[var(--muted-foreground)]" />
+                  <span className="mt-4 text-sm font-semibold text-[var(--foreground)]">Click to upload property photos</span>
+                  <span className="mt-1 text-xs text-[var(--muted-foreground)]">JPG, PNG up to 5MB</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      const files = Array.from(event.currentTarget.files ?? []);
+                      event.currentTarget.value = "";
+                      void handlePropertyImagesChange(files);
+                    }}
+                  />
+                </label>
+                
+                {preparingImages && <div className="mt-3 text-sm font-medium text-blue-600">Preparing images...</div>}
+
+                {propertyExistingImages.length > 0 && (
+                  <div className="mt-6">
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Existing images</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {propertyExistingImages.map((imageUrl, index) => (
+                        <div key={`${imageUrl}-${index}`} className="group relative overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm">
+                          <img src={imageUrl} alt={`Property ${index + 1}`} className="h-24 w-full object-cover transition-transform group-hover:scale-105" />
+                          <button
+                            type="button"
+                            className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            onClick={() => removeExistingPropertyImage(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {propertyImageFiles.length > 0 && (
+                  <div className="mt-6">
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">New uploads</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {propertyImageFiles.map((file, index) => (
+                        <div key={`${file.name}-${file.size}`} className="group relative overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm">
+                          {propertyImagePreviewUrls[index] ? (
+                            <img src={propertyImagePreviewUrls[index]} alt={file.name} className="h-24 w-full object-cover transition-transform group-hover:scale-105" />
+                          ) : <div className="h-24 w-full bg-slate-100" />}
+                          <button
+                            type="button"
+                            className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            onClick={() => removeUploadedPropertyImage(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3 pt-6 border-t border-[var(--border)] mt-8">
+              <Button variant="outline" className="rounded-xl shadow-sm" disabled={propertyWizardStep === 0 || busy} onClick={() => setPropertyWizardStep((current) => Math.max(0, current - 1))}>
+                Back
+              </Button>
+              {propertyWizardStep < 3 ? (
+                <Button
+                  className="rounded-xl shadow-sm px-6"
+                  disabled={
+                    preparingImages ||
+                    (propertyWizardStep === 0 && !propertyForm.type_logement_id) ||
+                    (propertyWizardStep === 1 && !propertyForm.commune_id && !communeDraft.nom.trim()) ||
+                    (propertyWizardStep === 2 && (!propertyForm.adresse || !propertyForm.superficie || !propertyForm.loyer))
+                  }
+                  onClick={() => setPropertyWizardStep((current) => Math.min(3, current + 1))}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button className="rounded-xl shadow-sm px-6" disabled={busy || preparingImages || totalPropertyImageCount < 2 || totalPropertyImageCount > 10} onClick={() => void handlePropertySubmit()}>
+                  {editingPropertyId ? "Save property" : "Create property"}
+                </Button>
+              )}
             </div>
           </div>
-        ) : null}
-      </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Contract Dialog */}
+      <Dialog open={contractWizardOpen} onOpenChange={setContractWizardOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px]">
+          <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <DialogTitle className="text-xl font-bold">{editingContractId ? "Edit Contract" : "Create Contract"}</DialogTitle>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              Step {contractWizardStep + 1} of 2
+            </div>
+          </DialogHeader>
+
+          <div className="h-1 w-full bg-[var(--border)]">
+            <div
+              className="h-full bg-[var(--primary)] transition-all duration-300 ease-out"
+              style={{ width: `${((contractWizardStep + 1) / 2) * 100}%` }}
+            />
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
+            {contractWizardStep === 0 ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tenant</Label>
+                  <select
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                    value={contratForm.locataire_id}
+                    onChange={(event) => {
+                      const tenantId = event.target.value;
+                      const tenantContract = contrats.find((contrat) => String(contrat.locataire.id) === tenantId);
+                      setContratForm((current) => ({
+                        ...current,
+                        locataire_id: tenantId,
+                        logement_id: tenantContract ? String(tenantContract.logement.id) : "",
+                        montant: tenantContract?.montant ?? current.montant,
+                        statut: tenantContract?.statut ?? current.statut,
+                      }));
+                    }}
+                  >
+                    <option value="">Select tenant</option>
+                    {tenantUsers.map((entry) => (
+                      <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Property</Label>
+                  <select
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                    value={contratForm.logement_id}
+                    onChange={(event) => {
+                      const selected = logements.find((entry) => String(entry.id) === event.target.value);
+                      setContratForm((current) => ({
+                        ...current,
+                        logement_id: event.target.value,
+                        montant: selected?.loyer ?? current.montant,
+                        statut: selected ? "active" : current.statut,
+                      }));
+                    }}
+                  >
+                    <option value="">Select property</option>
+                    {contractPropertyOptions.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.adresse}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Start Date</Label>
+                    <Input
+                      type="date"
+                      className="h-11 rounded-xl"
+                      value={contratForm.date_debut}
+                      onChange={(event) =>
+                        setContratForm((current) => ({ ...current, date_debut: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">End Date</Label>
+                    <Input
+                      type="date"
+                      className="h-11 rounded-xl"
+                      value={contratForm.date_fin}
+                      onChange={(event) =>
+                        setContratForm((current) => ({ ...current, date_fin: event.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Monthly Rent (MAD)</Label>
+                    <Input
+                      type="number"
+                      className="h-11 rounded-xl"
+                      value={contratForm.montant}
+                      onChange={(event) =>
+                        setContratForm((current) => ({ ...current, montant: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Status</Label>
+                    <select
+                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                      value={contratForm.statut}
+                      onChange={(event) =>
+                        setContratForm((current) => ({ ...current, statut: event.target.value }))
+                      }
+                    >
+                      <option value="active">Active</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Contract Information</div>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                      <span className="text-[var(--muted-foreground)]">Tenant</span>
+                      <span className="font-semibold text-[var(--foreground)]">{selectedContractTenant?.name ?? "Not selected"}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                      <span className="text-[var(--muted-foreground)]">Property</span>
+                      <span className="font-semibold text-[var(--foreground)]">{selectedContractProperty?.adresse ?? "Not selected"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--muted-foreground)]">Rent</span>
+                      <span className="font-semibold text-[var(--foreground)]">
+                        {selectedContractProperty ? `${formatMoney(selectedContractProperty.loyer)} MAD` : "Not selected"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-6 border-t border-[var(--border)] mt-6">
+              <Button
+                variant="outline"
+                className="rounded-xl shadow-sm"
+                disabled={contractWizardStep === 0 || busy}
+                onClick={() => setContractWizardStep(0)}
+              >
+                Back
+              </Button>
+              {contractWizardStep === 0 ? (
+                <Button
+                  className="rounded-xl shadow-sm px-6"
+                  disabled={!contratForm.locataire_id || !contratForm.logement_id || busy}
+                  onClick={() => setContractWizardStep(1)}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button
+                  className="rounded-xl shadow-sm px-6"
+                  disabled={!contratForm.date_debut || !contratForm.montant || busy}
+                  onClick={() => void handleContractSubmit()}
+                >
+                  {editingContractId ? "Save Contract" : "Create Contract"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Contract Details Dialog */}
+      <Dialog open={Boolean(contractDetails)} onOpenChange={(open) => !open && setContractDetails(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[640px]">
+          <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <DialogTitle className="text-xl font-bold">Contract Details</DialogTitle>
+          </DialogHeader>
+          
+          {contractDetails ? (
+            <div className="space-y-6 px-6 py-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tenant</div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-[var(--border)]">
+                      <AvatarImage src={contractDetails.locataire.user.avatar_url ?? undefined} />
+                      <AvatarFallback>{initials(contractDetails.locataire.user.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-semibold text-[var(--foreground)]">{contractDetails.locataire.user.name}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">{contractDetails.locataire.user.email}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Agent</div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-[var(--border)]">
+                      <AvatarImage src={contractDetails.agent.user.avatar_url ?? undefined} />
+                      <AvatarFallback>{initials(contractDetails.agent.user.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-semibold text-[var(--foreground)]">{contractDetails.agent.user.name}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">{contractDetails.agent.user.email}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+                <div className="space-y-4 text-sm">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Contract ref</span>
+                    <span className="font-semibold text-[var(--foreground)]">IF-{String(contractDetails.id).padStart(4, "0")}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Property</span>
+                    <span className="font-semibold text-[var(--foreground)]">{contractDetails.logement.adresse}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Amount</span>
+                    <span className="font-semibold text-[var(--foreground)]">{formatMoney(contractDetails.montant)} MAD</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Start</span>
+                    <span className="font-semibold text-[var(--foreground)]">{formatLongDate(contractDetails.date_debut)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">End</span>
+                    <span className="font-semibold text-[var(--foreground)]">{formatLongDate(contractDetails.date_fin, "Open")}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Status</span>
+                    <Badge variant={toneForStatus(contractDetails.statut)}>{contractDetails.statut}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--muted-foreground)]">Signature</span>
+                    <Badge variant={toneForStatus(contractDetails.signature_status)}>{contractDetails.signature_status}</Badge>
+                  </div>
+                  {contractDetails.signed_at ? (
+                    <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                      <span className="text-[var(--muted-foreground)]">Signed at</span>
+                      <span className="font-semibold text-[var(--foreground)]">{formatLongDate(contractDetails.signed_at)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {contractDetails.signature_data ? (
+                <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tenant Signature</div>
+                  <div className="flex items-center justify-center rounded-xl bg-white p-4 shadow-sm border border-[var(--border)]">
+                    <img src={contractDetails.signature_data} alt="Tenant signature" className="h-20 object-contain" />
+                  </div>
+                </div>
+              ) : null}
+
+              <Button
+                className="w-full rounded-xl shadow-sm"
+                onClick={() => {
+                  const property = logements.find((entry) => entry.id === contractDetails.logement.id) ?? null;
+                  downloadContractPdf(contractDetails, property);
+                }}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Download PDF Agreement
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tenant Details Dialog */}
+      <Dialog open={Boolean(tenantDetails)} onOpenChange={(open) => !open && setTenantDetails(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[640px]">
+          <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <DialogTitle className="text-xl font-bold">Tenant Details</DialogTitle>
+          </DialogHeader>
+          
+          {tenantDetails ? (
+            <div className="space-y-6 px-6 py-6">
+              <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16 border border-[var(--border)]">
+                    <AvatarImage src={tenantDetails.avatar_url ?? undefined} />
+                    <AvatarFallback className="text-xl">{initials(tenantDetails.name)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="text-xl font-bold text-[var(--foreground)]">{tenantDetails.name}</div>
+                    <div className="text-sm text-[var(--muted-foreground)]">{tenantDetails.email}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+                <div className="space-y-4 text-sm">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Phone</span>
+                    <span className="font-semibold text-[var(--foreground)]">{tenantDetails.phone ?? "No phone"}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Status</span>
+                    <Badge variant={toneForStatus(tenantDetails.status)}>{tenantDetails.status}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Active Property</span>
+                    <span className="font-semibold text-[var(--foreground)]">{tenantDetailsContract?.logement.adresse ?? "None"}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--muted-foreground)]">Contract Signature</span>
+                    <Badge variant={toneForStatus(tenantDetailsContract?.signature_status ?? "pending")}>
+                      {tenantDetailsContract?.signature_status ?? "none"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--muted-foreground)]">Last Login</span>
+                    <span className="font-semibold text-[var(--foreground)]">{formatLongDate(tenantDetails.last_login_at, "Never")}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Payments Summary</div>
+                <div className="mt-2 text-sm text-[var(--muted-foreground)]">
+                  {tenantDetailsPayments.length} payment{tenantDetailsPayments.length === 1 ? "" : "s"} recorded
+                </div>
+                <div className="mt-1 text-lg font-bold text-[var(--foreground)]">
+                  Total: {formatMoney(tenantDetailsPayments.reduce((total, entry) => total + Number.parseFloat(entry.montant || "0"), 0))} MAD
+                </div>
+              </div>
+
+              <Button
+                className="w-full rounded-xl shadow-sm"
+                onClick={() => {
+                  openTab("notifications");
+                  setTenantDetails(null);
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Contact Tenant
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Viewer Dialog (Carousel) */}
+      <Dialog open={Boolean(propertyImageViewer)} onOpenChange={(open) => !open && setPropertyImageViewer(null)}>
+        <DialogContent className="overflow-hidden rounded-2xl p-0 shadow-2xl sm:max-w-[980px] bg-black/95 border-white/10">
+          {propertyImageViewer ? (
+            <div>
+              <div className="relative flex items-center justify-center p-4">
+                <img
+                  src={propertyImageViewer.images[propertyImageViewer.index]}
+                  alt={`Property image ${propertyImageViewer.index + 1}`}
+                  className="h-[75vh] w-full object-contain"
+                />
+                {propertyImageViewer.images.length > 1 ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full border-white/20 bg-black/50 text-white hover:bg-black/80 backdrop-blur-md"
+                      onClick={() =>
+                        setPropertyImageViewer((current) =>
+                          current
+                            ? {
+                                ...current,
+                                index: (current.index - 1 + current.images.length) % current.images.length,
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full border-white/20 bg-black/50 text-white hover:bg-black/80 backdrop-blur-md"
+                      onClick={() =>
+                        setPropertyImageViewer((current) =>
+                          current
+                            ? {
+                                ...current,
+                                index: (current.index + 1) % current.images.length,
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              <div className="px-6 py-4 text-center text-sm font-medium text-white/80 border-t border-white/10">
+                {propertyImageViewer.index + 1} of {propertyImageViewer.images.length}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Dialog */}
+      <Dialog open={paymentWizardOpen} onOpenChange={setPaymentWizardOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px]">
+          <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <DialogTitle className="text-xl font-bold">Record Payment</DialogTitle>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              Step {paymentWizardStep + 1} of 2
+            </div>
+          </DialogHeader>
+
+          <div className="h-1 w-full bg-[var(--border)]">
+            <div
+              className="h-full bg-[var(--primary)] transition-all duration-300 ease-out"
+              style={{ width: `${((paymentWizardStep + 1) / 2) * 100}%` }}
+            />
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
+            {paymentWizardStep === 0 ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Contract</Label>
+                  <select
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                    value={paymentForm.contrat_id}
+                    onChange={(event) => {
+                      const selected = contrats.find((entry) => String(entry.id) === event.target.value);
+                      setPaymentForm((current) => ({
+                        ...current,
+                        contrat_id: event.target.value,
+                        montant: selected?.montant ?? current.montant,
+                        statut: "awaiting_tenant_approval",
+                      }));
+                    }}
+                  >
+                    <option value="">Select contract</option>
+                    {contrats.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.logement.adresse} • {entry.locataire.user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Received Amount (MAD)</Label>
+                    <Input
+                      type="number"
+                      className="h-11 rounded-xl"
+                      value={paymentForm.montant}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({ ...current, montant: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Payment Date</Label>
+                    <Input
+                      type="date"
+                      className="h-11 rounded-xl"
+                      value={paymentForm.date_paiement}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({
+                          ...current,
+                          date_paiement: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Method</Label>
+                    <select
+                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                      value={paymentForm.mode}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({
+                          ...current,
+                          mode: event.target.value,
+                          statut: ["Virement", "Cash"].includes(event.target.value) ? "awaiting_tenant_approval" : current.statut,
+                        }))
+                      }
+                    >
+                      <option value="Virement">Bank Transfer</option>
+                      <option value="Card">Credit Card</option>
+                      <option value="Check">Check</option>
+                      <option value="Cash">Cash</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Status</Label>
+                    <select
+                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                      value={paymentForm.statut}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({ ...current, statut: event.target.value }))
+                      }
+                    >
+                      <option value="awaiting_tenant_approval">Needs tenant approval</option>
+                      <option value="partial">Partial</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {paymentForm.mode === "Virement" ? (
+                  <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Bank Transfer Details</div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <Input className="h-11 rounded-xl" value={paymentForm.rib} onChange={(event) => setPaymentForm((current) => ({ ...current, rib: event.target.value }))} placeholder="RIB / IBAN" />
+                      <Input className="h-11 rounded-xl" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transfer reference" />
+                    </div>
+                    <div className="mt-3 text-xs text-[var(--muted-foreground)]">The tenant will approve this confirmation after checking the transfer.</div>
+                  </div>
+                ) : null}
+                
+                {paymentForm.mode === "Cash" ? (
+                  <div className="rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Cash Receipt Note</div>
+                    <textarea
+                      className="mt-3 min-h-[100px] w-full rounded-xl border border-[var(--border)] bg-white p-4 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                      value={paymentForm.cash_note}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, cash_note: event.target.value }))}
+                      placeholder="Who received the cash, location, receipt number..."
+                    />
+                  </div>
+                ) : null}
+                
+                {selectedPaymentContract ? (
+                  <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+                    <div className="font-semibold text-[var(--foreground)]">{selectedPaymentContract.locataire.user.name}</div>
+                    <div className="mt-1 text-sm text-[var(--muted-foreground)]">{selectedPaymentContract.logement.adresse}</div>
+                    <div className="mt-3 text-sm font-medium text-[var(--foreground)]">Expected rent: {formatMoney(selectedPaymentContract.montant)} MAD</div>
+                  </div>
+                ) : null}
+              </>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-6 border-t border-[var(--border)] mt-6">
+              <Button
+                variant="outline"
+                className="rounded-xl shadow-sm"
+                disabled={paymentWizardStep === 0 || busy}
+                onClick={() => setPaymentWizardStep(0)}
+              >
+                Back
+              </Button>
+              {paymentWizardStep === 0 ? (
+                <Button
+                  className="rounded-xl shadow-sm px-6"
+                  disabled={!paymentForm.contrat_id || !paymentForm.montant || busy}
+                  onClick={() => setPaymentWizardStep(1)}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button className="rounded-xl shadow-sm px-6" disabled={busy} onClick={() => void handlePaymentSubmit()}>
+                  Confirm Payment
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

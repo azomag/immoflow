@@ -18,11 +18,11 @@ export default function Footer() {
           <div className="flex flex-col lg:col-span-2">
             <Link href="/" className="mb-6 inline-flex items-center">
               <Image
-                src="/logo/logo-immoflow.png"
+                src="assets/profile/immoflow-logo-light.png"
                 alt="Immoflow"
-                width={60}
-                height={60}
-                className="h-14 w-14 object-contain"
+                width={80}
+                height={80}
+                className="h-18 w-18 object-contain"
               />
             </Link>
             <p className="max-w-md text-sm leading-relaxed text-white/50">{t.footer.tagline}</p>

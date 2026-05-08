@@ -5,12 +5,19 @@ import { UserRound, Building2, ShieldCheck, ArrowRight } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 const icons = [UserRound, Building2, ShieldCheck];
+const cardViewport = { once: true, margin: "-80px" };
+const cardTransition = { duration: 0.7 };
+const ctaHover = { scale: 1.03, x: 4 };
+const ctaTap = { scale: 0.97 };
 
 export default function Introduction() {
   const { t } = useI18n();
 
   return (
-    <section id="overview" className="relative overflow-hidden bg-background py-28 md:py-36 noise-overlay">
+    <section
+      id="overview"
+      className="section-optimized relative overflow-hidden bg-background py-28 md:py-36 noise-overlay"
+    >
       <div className="orb orb-gold top-0 right-0 h-[600px] w-[600px] opacity-15" />
       <div className="orb orb-pink bottom-0 left-0 h-[400px] w-[400px] opacity-10" />
 
@@ -36,10 +43,10 @@ export default function Introduction() {
           </div>
 
           <motion.a
-            whileHover={{ scale: 1.03, x: 4 }}
-            whileTap={{ scale: 0.97 }}
+            whileHover={ctaHover}
+            whileTap={ctaTap}
             href="#workflows"
-            className="group inline-flex items-center gap-3 rounded-full bg-primary px-8 py-4 text-base font-medium text-primary-foreground transition-all duration-300 hover:shadow-xl hover:shadow-primary/15"
+            className="group inline-flex transform-gpu items-center gap-3 rounded-full bg-primary px-8 py-4 text-base font-medium text-primary-foreground transition-all duration-300 hover:shadow-xl hover:shadow-primary/15"
           >
             {t.overview.cta}
             <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -55,9 +62,9 @@ export default function Introduction() {
                 key={card.title}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ duration: 0.7, delay: index * 0.12 }}
-                className="glass-card rounded-3xl p-8 lg:p-9"
+                viewport={cardViewport}
+                transition={{ ...cardTransition, delay: index * 0.12 }}
+                className="glass-card transform-gpu rounded-3xl p-8 lg:p-9"
               >
                 <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/12 text-secondary">
                   <Icon className="h-6 w-6" />

@@ -131,7 +131,7 @@ const translations: Record<Locale, TranslationTree> = {
     },
     hero: {
       badge: "Rental operations platform",
-      title: "Immoflow for rental teams.",
+      title: "Integrated Real Estate Management System",
       description:
         "A professional real-estate workflow for public listings, tenant follow-up, operational management, and decision-ready reporting.",
       primaryCta: "Browse listings",
@@ -308,9 +308,9 @@ const translations: Record<Locale, TranslationTree> = {
       description:
         "Discuss public listings, internal management, multilingual deployment, and reporting needs with our team.",
       cards: [
-        { label: "Email", value: "contact@immoflow.app" },
-        { label: "Phone", value: "+212 5 00 00 00 00" },
-        { label: "Office", value: "Casablanca, Morocco" },
+        { label: "Email", value: "contact@immoflow.com" },
+        { label: "Phone", value: "+212 695446640" },
+        { label: "Office", value: "Sala EL Jadida, Morocco" },
       ],
       cta: "Request a demo",
     },
@@ -342,7 +342,7 @@ const translations: Record<Locale, TranslationTree> = {
     },
     hero: {
       badge: "Plateforme de gestion locative",
-      title: "Immoflow pour les equipes locatives.",
+      title: "Système intégré de gestion immobilière",
       description:
         "Une experience professionnelle pour publier des logements, suivre la relation locataire, piloter la gestion et analyser la performance depuis une seule plateforme.",
       primaryCta: "Voir les logements",
@@ -519,9 +519,9 @@ const translations: Record<Locale, TranslationTree> = {
       description:
         "Parlez de votre site public, de votre gestion interne, du multilingue et de vos besoins de reporting avec notre equipe.",
       cards: [
-        { label: "Email", value: "contact@immoflow.app" },
-        { label: "Telephone", value: "+212 5 00 00 00 00" },
-        { label: "Bureau", value: "Casablanca, Maroc" },
+        { label: "Email", value: "contact@immoflow.com" },
+        { label: "Telephone", value: "+212 695446640" },
+        { label: "Bureau", value: "Sala EL Jadida" },
       ],
       cta: "Demander une demo",
     },
@@ -553,7 +553,7 @@ const translations: Record<Locale, TranslationTree> = {
     },
     hero: {
       badge: "منصة لتدبير الكراء",
-      title: "Immoflow لفرق التسيير الكرائي.",
+      title: "نظام متكامل للتسيير العقاري",
       description:
         "تجربة احترافية لنشر السكنات ومتابعة المكتريين وتسيير العمليات وتحليل الاداء من خلال واجهة واحدة واضحة.",
       primaryCta: "تصفح السكنات",
@@ -730,9 +730,9 @@ const translations: Record<Locale, TranslationTree> = {
       description:
         "ناقش معنا الموقع العمومي والتدبير الداخلي وتعدد اللغات واحتياجات التقارير قبل الاطلاق.",
       cards: [
-        { label: "البريد", value: "contact@immoflow.app" },
-        { label: "الهاتف", value: "+212 5 00 00 00 00" },
-        { label: "المكتب", value: "الدار البيضاء - المغرب" },
+        { label: "البريد", value: "contact@immoflow.com" },
+        { label: "الهاتف", value: "+212 695446640" },
+        { label: "المكتب", value: "سلا الجديدة" },
       ],
       cta: "اطلب عرضا تجريبيا",
     },
@@ -803,8 +803,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const isArabic = locale === "ar";
+
     document.documentElement.lang = locale;
-    document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+    document.documentElement.dir = isArabic ? "rtl" : "ltr";
+    document.documentElement.dataset.locale = locale;
+    document.documentElement.classList.toggle("locale-ar", isArabic);
   }, [locale]);
 
   const value = useMemo<I18nContextValue>(

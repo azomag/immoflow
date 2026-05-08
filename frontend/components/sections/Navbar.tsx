@@ -74,22 +74,22 @@ export default function Navbar() {
     <>
       <nav
         ref={navRef}
-        className="absolute top-0 left-0 right-0 z-50 border-b border-white/12 bg-white/8 backdrop-blur-md"
+        className="absolute top-0 left-0 right-0 z-50  border-white/12  backdrop-blur-md"
       >
         <div className="container mx-auto flex items-center justify-between px-6 py-4 lg:px-12">
           {/* Logo */}
           <Link href="/" className="relative z-10 flex items-center">
             <Image
-              src="/logo/logo-immoflow.png"
+              src="assets/profile/immoflow-logo-light.png"
               alt="Immoflow"
-              width={52}
-              height={52}
-              className="h-12 w-12 object-contain"
+              width={100}
+              height={100}
+              className="h-15 w-15 object-contain"
             />
           </Link>
 
           {/* Desktop Links */}
-          <div className="hidden items-center gap-1 md:flex">
+          <div className="hidden items-center gap-1 md:flex text-gray-200">
             {t.nav.links.map((link) => (
               <Link
                 key={`desktop-link-${link.href}`}
@@ -105,11 +105,11 @@ export default function Navbar() {
           {/* Desktop Right Actions */}
           <div className="hidden items-center gap-3 md:flex">
             {/* Desktop Locale Dropdown */}
-            <div ref={desktopLocaleRef} className="relative">
+            <div ref={desktopLocaleRef} className="relative ">
               <button
                 type="button"
                 onClick={() => setIsDesktopLocaleOpen((open) => !open)}
-                className="flex items-center gap-3 rounded-full border border-white/14 bg-white/10 px-3 py-2 text-sm text-white backdrop-blur-md transition-colors hover:bg-white/14"
+                className="flex items-center gap-3  rounded-full border border-white/14 bg-white/10 px-3 py-2 text-sm text-white backdrop-blur-md transition-colors hover:bg-white/14"
               >
                 <Image
                   src={activeLocale.flag}
@@ -136,7 +136,7 @@ export default function Navbar() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute right-0 top-[calc(100%+12px)] min-w-[180px] overflow-hidden rounded-2xl border border-white/14 bg-[#13202b]/92 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl"
+                    className="absolute  right-0 top-[calc(100%+12px)] min-w-[180px] overflow-hidden rounded-2xl border border-white/14 bg-[#13202b]/92 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl"
                   >
                     {(["fr", "en", "ar"] as Locale[]).map((lang) => {
                       const option = localeOptions[lang];

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { AuthNavActions } from "@/components/shared/AuthNavActions";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 
 export function PublicHeader() {
   const { t } = useI18n();
@@ -36,6 +37,7 @@ export function PublicHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <LanguageSwitcher compact />
           <Link
             href="/"
             className="hidden items-center gap-2 rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/72 transition hover:border-black/20 hover:text-black sm:flex"

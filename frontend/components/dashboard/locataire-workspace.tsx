@@ -23,6 +23,7 @@ import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -321,6 +322,7 @@ export function LocataireWorkspace({
           </div>
 
           <div className="flex items-center gap-4">
+            <LanguageSwitcher compact />
             <a
               href={getLandingUrl()}
               className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--foreground)] shadow-[var(--shadow-sm)] transition hover:border-[var(--border-strong)] sm:flex"
@@ -399,7 +401,7 @@ export function LocataireWorkspace({
               <div className="rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-sm)] card-lift">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">My Contract</div>
                 <div className="mt-8">
-                  <Badge variant={toneForStatus(activeContract?.statut ?? pendingContract?.signature_status ?? "pending") as any} className="text-base px-3 py-1">
+                  <Badge variant={toneForStatus(activeContract?.statut ?? pendingContract?.signature_status ?? "pending")} className="text-base px-3 py-1">
                     {activeContract ? "Active" : pendingContract ? "Pending signature" : "No contract"}
                   </Badge>
                 </div>
@@ -490,7 +492,7 @@ export function LocataireWorkspace({
                         {formatMoney(payment.montant)} MAD
                       </div>
                       <div className="self-center">
-                        <Badge variant={toneForStatus(payment.statut) as any}>{payment.statut}</Badge>
+                        <Badge variant={toneForStatus(payment.statut)}>{payment.statut}</Badge>
                       </div>
                       <div className="self-center text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]">
                         <button type="button" onClick={() => handleReceiptDownload(payment)}>

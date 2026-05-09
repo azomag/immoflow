@@ -60,6 +60,7 @@ import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -932,6 +933,7 @@ export function AgentWorkspace({
             </div>
 
             <div className="flex shrink-0 items-center justify-end gap-3">
+              <LanguageSwitcher compact />
               <NotificationsPopover
                 token={token}
                 userId={user.id}
@@ -1072,7 +1074,7 @@ export function AgentWorkspace({
                               </div>
                             </div>
                             <div className="text-right sm:text-left">
-                              <Badge variant={toneForStatus(property.status) as any}>{property.status}</Badge>
+                              <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
                             </div>
                             <div className="hidden text-sm font-medium text-[var(--muted-foreground)] sm:block">
                               {formatShortDate(property.nextEventDate)}

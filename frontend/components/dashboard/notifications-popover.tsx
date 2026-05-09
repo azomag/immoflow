@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Bell, Check, Trash2 } from "lucide-react";
 import type { NotificationRecord } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
@@ -22,12 +22,21 @@ export function NotificationsPopover({
   userId: number;
   notifications: NotificationRecord[];
 }) {
-  const [items, setItems] = useState<NotificationRecord[]>(notifications);
+  const [readIds, setReadIds] = useState<number[]>([]);
+  const [deletedIds, setDeletedIds] = useState<number[]>([]);
   const [busyIds, setBusyIds] = useState<number[]>([]);
 
-  useEffect(() => {
-    setItems(notifications);
-  }, [notifications]);
+  const items = useMemo(
+    () =>
+      notifications
+        .filter((item) => !deletedIds.includes(item.id))
+        .map((item) =>
+          readIds.includes(item.id) && !item.read_at
+            ? { ...item, read_at: new Date().toISOString() }
+            : item,
+        ),
+    [deletedIds, notifications, readIds],
+  );
 
   const unreadCount = useMemo(
     () => items.filter((item) => item.recipient.id === userId && !item.read_at).length,
@@ -46,13 +55,7 @@ export function NotificationsPopover({
         { method: "PATCH" },
         token,
       );
-      setItems((current) =>
-        current.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, read_at: new Date().toISOString() }
-            : entry,
-        ),
-      );
+      setReadIds((current) => (current.includes(item.id) ? current : [...current, item.id]));
     } finally {
       setBusyIds((current) => current.filter((id) => id !== item.id));
     }
@@ -70,7 +73,7 @@ export function NotificationsPopover({
         { method: "DELETE" },
         token,
       );
-      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setDeletedIds((current) => (current.includes(item.id) ? current : [...current, item.id]));
     } finally {
       setBusyIds((current) => current.filter((id) => id !== item.id));
     }

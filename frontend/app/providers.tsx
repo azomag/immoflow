@@ -4,12 +4,14 @@ import { SessionProvider } from "next-auth/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nProvider } from "@/lib/i18n";
 import { SmoothScroll } from "@/components/shared/SmoothScroll";
+import { RuntimeLocalizer } from "@/components/shared/RuntimeLocalizer";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <I18nProvider>
         <TooltipProvider delayDuration={300}>
+          <RuntimeLocalizer />
           <SmoothScroll>{children}</SmoothScroll>
         </TooltipProvider>
       </I18nProvider>

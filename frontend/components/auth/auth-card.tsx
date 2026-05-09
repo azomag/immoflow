@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 
 type SignupChoice = "agent" | "locataire" | "administration";
 
@@ -314,7 +315,9 @@ function normalizeAuthError(value: string) {
       </div>
 
       {/* ── Right Form Panel ── */}
-      <div className="flex flex-1 flex-col items-center justify-center bg-[var(--background)] px-6 py-10 md:px-12 lg:px-16">
+      <div className="relative flex flex-1 flex-col items-center justify-center bg-[var(--background)] px-6 py-10 md:px-12 lg:px-16">
+        <LanguageSwitcher className="absolute right-6 top-6" />
+
         {/* Mobile logo */}
         <div className="mb-8 flex items-center lg:hidden">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.25)]">

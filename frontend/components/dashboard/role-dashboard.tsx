@@ -225,6 +225,8 @@ export function RoleDashboard({ role }: { role: AppRole }) {
 
     let cancelled = false;
 
+    // The dashboard fetch is an async external synchronization, not derived render state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDataWithRetry()
       .then(() => {
         if (cancelled) return;
@@ -244,6 +246,7 @@ export function RoleDashboard({ role }: { role: AppRole }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, token]);
 
   useEffect(() => {

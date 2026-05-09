@@ -5,12 +5,14 @@ import { signOut, useSession } from "next-auth/react";
 import { Clock3, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 
 export default function PendingPage() {
   const { data: session } = useSession();
 
   return (
     <main className="page-grid flex min-h-screen items-center justify-center px-6 py-10">
+      <LanguageSwitcher className="absolute right-6 top-6" />
       <Card className="w-full max-w-xl">
         <CardHeader>
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgba(210,138,30,0.14)] text-[var(--warning)]">

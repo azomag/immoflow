@@ -130,6 +130,45 @@ set_env_value() {
   fi
 }
 
+get_env_value() {
+  local file="$1"
+  local key="$2"
+  local line
+
+  [ -f "$file" ] || return 1
+
+  line="$(grep -E "^$key=" "$file" | tail -n 1 || true)"
+  [ -n "$line" ] || return 1
+
+  printf "%s" "${line#*=}"
+}
+
+resolve_backend_setting() {
+  local file="$1"
+  local key="$2"
+  local default="$3"
+  local current
+
+  if [ "${!key+x}" ]; then
+    printf "%s" "${!key}"
+    return
+  fi
+
+  if current="$(get_env_value "$file" "$key")"; then
+    if [ "$key" = "DB_CONNECTION" ] && [ "$current" = "sqlite" ]; then
+      printf "%s" "$default"
+      return
+    fi
+
+    if [ "$key" = "DB_PASSWORD" ] || [ -n "$current" ]; then
+      printf "%s" "$current"
+      return
+    fi
+  fi
+
+  printf "%s" "$default"
+}
+
 sync_frontend_env() {
   local file="$FRONTEND_DIR/.env.local"
 
@@ -143,6 +182,46 @@ sync_backend_env() {
   set_env_value "$file" APP_URL "http://$BACKEND_HOST:$BACKEND_PORT"
   set_env_value "$file" CORS_ALLOWED_ORIGINS "http://localhost:3000,http://127.0.0.1:3000,http://localhost:$FRONTEND_PORT,http://$FRONTEND_HOST:$FRONTEND_PORT"
   set_env_value "$file" SANCTUM_STATEFUL_DOMAINS "localhost,localhost:3000,localhost:$FRONTEND_PORT,localhost:$BACKEND_PORT,127.0.0.1,127.0.0.1:3000,$FRONTEND_HOST:$FRONTEND_PORT,$BACKEND_HOST:$BACKEND_PORT,::1"
+  set_env_value "$file" DB_CONNECTION "$(resolve_backend_setting "$file" DB_CONNECTION mysql)"
+  set_env_value "$file" DB_HOST "$(resolve_backend_setting "$file" DB_HOST 127.0.0.1)"
+  set_env_value "$file" DB_PORT "$(resolve_backend_setting "$file" DB_PORT 3306)"
+  set_env_value "$file" DB_DATABASE "$(resolve_backend_setting "$file" DB_DATABASE immoflow)"
+  set_env_value "$file" DB_USERNAME "$(resolve_backend_setting "$file" DB_USERNAME root)"
+  set_env_value "$file" DB_PASSWORD "$(resolve_backend_setting "$file" DB_PASSWORD "")"
+}
+
+prepare_database() {
+  local file="$BACKEND_DIR/.env"
+  local db_connection
+  local db_host
+  local db_port
+  local db_database
+  local db_username
+  local db_password
+
+  [ "${PREPARE_DATABASE:-1}" = "1" ] || return
+
+  db_connection="$(get_env_value "$file" DB_CONNECTION || true)"
+  [ "$db_connection" = "mysql" ] || return
+
+  db_host="$(get_env_value "$file" DB_HOST || printf "127.0.0.1")"
+  db_port="$(get_env_value "$file" DB_PORT || printf "3306")"
+  db_database="$(get_env_value "$file" DB_DATABASE || printf "immoflow")"
+  db_username="$(get_env_value "$file" DB_USERNAME || printf "root")"
+  db_password="$(get_env_value "$file" DB_PASSWORD || true)"
+
+  printf "Preparing MySQL database...\n"
+  DB_HOST="$db_host" \
+    DB_PORT="$db_port" \
+    DB_DATABASE="$db_database" \
+    DB_USERNAME="$db_username" \
+    DB_PASSWORD="$db_password" \
+    php -r '$host = getenv("DB_HOST") ?: "127.0.0.1"; $port = getenv("DB_PORT") ?: "3306"; $database = getenv("DB_DATABASE") ?: "immoflow"; $username = getenv("DB_USERNAME") ?: "root"; $password = getenv("DB_PASSWORD"); try { $pdo = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]); $quotedDatabase = str_replace("`", "``", $database); $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$quotedDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); } catch (Throwable $e) { fwrite(STDERR, "Could not prepare MySQL database: ".$e->getMessage().PHP_EOL); exit(1); }'
+
+  if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
+    printf "Running Laravel migrations...\n"
+    (cd "$BACKEND_DIR" && php artisan migrate --force)
+  fi
 }
 
 ensure_backend() {
@@ -251,6 +330,7 @@ fi
 sync_backend_env
 sync_frontend_env
 (cd "$BACKEND_DIR" && php artisan config:clear >/dev/null)
+prepare_database
 
 printf "\nImmoFlow is starting:\n"
 printf "  Backend:  http://%s:%s\n" "$BACKEND_HOST" "$BACKEND_PORT"

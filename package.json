@@ -1,12 +1,16 @@
 {
   "private": true,
   "scripts": {
-    "dev": "bash scripts/run-all.sh",
+    "dev": "node scripts/dev.cjs start",
     "start": "npm run dev",
-    "stop": "bash scripts/stop-all.sh",
-    "stop:all": "STOP_XAMPP=1 bash scripts/stop-all.sh",
-    "xampp:start": "sudo /opt/lampp/lampp start",
-    "xampp:stop": "sudo /opt/lampp/lampp stop",
-    "xampp:status": "sudo /opt/lampp/lampp status"
+    "stop": "node scripts/dev.cjs stop",
+    "stop:all": "node scripts/dev.cjs stop-all",
+    "dev:linux": "bash scripts/run-all.sh",
+    "stop:linux": "bash scripts/stop-all.sh",
+    "dev:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-all.ps1",
+    "stop:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-all.ps1",
+    "xampp:start": "node scripts/xampp.cjs start",
+    "xampp:stop": "node scripts/xampp.cjs stop",
+    "xampp:status": "node scripts/xampp.cjs status"
   }
 }

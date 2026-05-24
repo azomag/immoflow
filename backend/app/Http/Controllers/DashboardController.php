@@ -93,13 +93,14 @@ class DashboardController extends Controller
 
         return [
             'metrics' => [
-                ['label' => 'Available Properties', 'value' => Logement::query()->count()],
+                ['label' => 'Available Properties', 'value' => Logement::query()->whereIn('statut_publication', ['disponible', 'listed'])->count()],
                 ['label' => 'My Contracts', 'value' => Contrat::query()->where('locataire_id', $locataireId)->count()],
                 ['label' => 'Unsigned Contracts', 'value' => Contrat::query()->where('locataire_id', $locataireId)->where('signature_status', 'pending')->count()],
                 ['label' => 'Pending Payments', 'value' => Paiement::query()->whereHas('contrat', fn ($query) => $query->where('locataire_id', $locataireId))->where('statut', 'pending')->count()],
             ],
             'available_properties' => Logement::query()
                 ->with(['commune', 'typeLogement', 'agent.user'])
+                ->whereIn('statut_publication', ['disponible', 'listed'])
                 ->latest()
                 ->limit(8)
                 ->get(),

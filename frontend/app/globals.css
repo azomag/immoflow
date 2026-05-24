@@ -168,6 +168,25 @@ textarea {
   font: inherit;
 }
 
+.location-picker-marker {
+  align-items: center;
+  background: rgba(156, 102, 68, 0.18);
+  border: 1px solid rgba(156, 102, 68, 0.32);
+  border-radius: 999px;
+  display: flex;
+  justify-content: center;
+}
+
+.location-picker-marker-dot {
+  background: var(--primary);
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
 /* ============================================================
    UTILITIES
    ============================================================ */

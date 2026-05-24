@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Manrope, Tajawal } from "next/font/google";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { Providers } from "./providers";
 

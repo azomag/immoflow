@@ -116,7 +116,7 @@ export default function Navbar() {
                   alt={activeLocale.label}
                   width={18}
                   height={18}
-                  className="h-[18px] w-[18px] rounded-full object-cover"
+                  className="h-[19px] w-[25px] rounded-xl object-cover"
                 />
                 <span className="font-mono text-xs uppercase tracking-widest text-white/88">
                   {activeLocale.short}

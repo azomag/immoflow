@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState } from "react";
+
 import { getProviders, signIn } from "next-auth/react";
 import {
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   UserRound,
   KeyRound,
   Mail,
+  CheckCircle2
 } from "lucide-react";
 import { registerFormWithBackend } from "@/lib/api";
 import { prepareImageForUpload } from "@/lib/image-upload";
@@ -28,6 +30,7 @@ import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 
 type SignupChoice = "agent" | "locataire" | "administration";
 
+// Keeping your beautiful original gradients for the icons
 const choices: Array<{
   id: SignupChoice;
   label: string;
@@ -40,21 +43,21 @@ const choices: Array<{
     label: "Agent",
     description: "Create properties, contracts, and collect payments.",
     icon: Building2,
-    iconClass: "bg-[linear-gradient(135deg,#7f5539_0%,#9c6644_100%)] text-white",
+    iconClass: "bg-[linear-gradient(135deg,#7f5539_0%,#9c6644_100%)] text-white shadow-[0_4px_12px_rgba(127,85,57,0.3)]",
   },
   {
     id: "locataire",
     label: "Locataire",
     description: "Access contracts, residence details, and receipts.",
     icon: UserRound,
-    iconClass: "bg-[linear-gradient(135deg,#b08968_0%,#ddb892_100%)] text-white",
+    iconClass: "bg-[linear-gradient(135deg,#b08968_0%,#ddb892_100%)] text-white shadow-[0_4px_12px_rgba(176,137,104,0.3)]",
   },
   {
     id: "administration",
     label: "Administration",
     description: "Admins sign in here. Super admin creates admin accounts.",
     icon: ShieldCheck,
-    iconClass: "bg-[linear-gradient(135deg,#111827_0%,#000000_100%)] text-white",
+    iconClass: "bg-[linear-gradient(135deg,#18181b_0%,#09090b_100%)] text-white shadow-[0_4px_12px_rgba(0,0,0,0.2)]",
   },
 ];
 
@@ -119,7 +122,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
     return `${form.first_name} ${form.last_name}`.trim();
   }
 
-function normalizeAuthError(value: string) {
+  function normalizeAuthError(value: string) {
     try {
       return decodeURIComponent(value);
     } catch {
@@ -149,7 +152,7 @@ function normalizeAuthError(value: string) {
       }
 
       await new Promise((resolve) =>
-        setTimeout(resolve, attempt === 0 ? 1200 : 2200),
+        setTimeout(resolve, attempt === 0 ? 1200 : 2200)
       );
     }
 
@@ -181,7 +184,7 @@ function normalizeAuthError(value: string) {
       setError(
         avatarError instanceof Error
           ? avatarError.message
-          : "Could not prepare the avatar image.",
+          : "Could not prepare the avatar image."
       );
     } finally {
       setPreparingAvatar(false);
@@ -236,7 +239,8 @@ function normalizeAuthError(value: string) {
 
       setPending(true);
       const signupRole = choice;
-      if (!signupRole) throw new Error("Choose Agent or Locataire to create an account.");
+      if (!signupRole)
+        throw new Error("Choose Agent or Locataire to create an account.");
 
       const payload = new FormData();
       payload.set("name", fullName());
@@ -248,7 +252,8 @@ function normalizeAuthError(value: string) {
       payload.set("password_confirmation", form.password_confirmation);
 
       if (signupRole === "locataire") {
-        if (form.date_naissance) payload.set("date_naissance", form.date_naissance);
+        if (form.date_naissance)
+          payload.set("date_naissance", form.date_naissance);
         if (form.adresse.trim()) payload.set("adresse", form.adresse.trim());
       }
 
@@ -301,118 +306,147 @@ function normalizeAuthError(value: string) {
     });
   }
 
+  // Next-Gen Premium Inputs
+  const inputClassName =
+    "h-12 w-full rounded-xl bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder-zinc-400 focus:bg-white focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 px-4 transition-all duration-300 shadow-sm";
+  
+  const labelClassName = "text-[13px] font-semibold text-zinc-700 mb-1.5 block";
+
   return (
-    <div className="flex min-h-screen">
-      {/* ── Left Visual Panel ── */}
-      <div className="relative hidden lg:block lg:w-[44%] overflow-hidden bg-[#dfeff7]">
+    <div className="flex min-h-screen bg-white font-sans selection:bg-zinc-900 selection:text-white p-5">
+     
+      {/* ── Left Visual Panel (Full Bleed Image with Glassmorphism) ── */}
+      <div className="relative hidden lg:flex lg:w-1/2 overflow-hidden bg-zinc-100 items-end p-12 xl:p-20 rounded-l-2xl">
         <Image
-          src="/assets/profile/logo/immoflow-logo.png"
-          alt="ImmoFlow"
+          src="/assets/profile/logo/login-image.jpeg"
+          alt="ImmoFlow Architecture"
           fill
           priority
-          className="object-contain p-16 xl:p-24"
+          className="object-cover object-center rounded-l-2xl"
         />
+        {/* Beautiful Multi-Stop Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-900/40 to-transparent z-10" />
+        
+        {/* <div className="relative z-20 w-full max-w-lg">
+          <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-2xl">
+            <Building2 className="h-7 w-7" />
+          </div>
+          <h2 className="text-4xl font-semibold tracking-tight text-white mb-4 drop-shadow-sm leading-tight">
+            Design your future, <br />
+            one blueprint at a time.
+          </h2>
+          <p className="text-zinc-300 text-base leading-relaxed mb-8 max-w-md">
+            Join an exclusive network of visionaries. Immoflow provides premium resources to elevate your architectural excellence.
+          </p>
+          <div className="flex items-center gap-4 text-sm text-zinc-400 font-medium">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-zinc-300" /> Premium Access
+            </span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-zinc-300" /> Secure Cloud
+            </span>
+          </div>
+        </div> */}
       </div>
 
-      {/* ── Right Form Panel ── */}
-      <div className="relative flex flex-1 flex-col items-center justify-center bg-[var(--background)] px-6 py-10 md:px-12 lg:px-16">
-        <LanguageSwitcher className="absolute right-6 top-6" />
+      {/* ── Right Form Panel (Clean, Spacious, Minimalist) ── */}
+      <div className="relative flex flex-1 flex-col justify-center px-6 py-12 md:px-16 lg:px-24">
 
         {/* Mobile logo */}
-        <div className="mb-8 flex items-center lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-[0_4px_12px_rgba(1,79,134,0.25)]">
-            <Image src="/assets/profile/logo/immoflow-logo.png" alt="ImmoFlow logo" width={36} height={36} className="h-full w-full object-contain" />
+        <div className="mb-10 flex items-center lg:hidden">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg">
+            <Building2 className="h-6 w-6" />
           </div>
         </div>
 
-        <div className="w-full max-w-md">
-          {/* Step badge */}
-          <div className="mb-4 flex items-center gap-3">
-            <Badge className="rounded-full border-[rgba(1,73,124,0.24)] bg-[var(--primary-glow)] text-[var(--primary)] text-xs font-semibold">
-              {loginMode ? "Secure access" : `Step ${step} of 3`}
-            </Badge>
+        <div className="w-full max-w-md mx-auto">
+          {/* Header Section */}
+          <div className="mb-8">
+            <div className="mb-4 flex items-center gap-3">
+              <Badge className="rounded-full border border-zinc-200 bg-zinc-100/50 text-zinc-700 px-3 py-1 text-[11px] font-bold tracking-wider uppercase shadow-none">
+                {loginMode ? "Secure Authentication" : `Step ${step} of 3`}
+              </Badge>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-950 mb-2">
+              {loginMode
+                ? "Welcome back."
+                : step === 1
+                ? "Choose account type"
+                : selectedChoice?.id === "agent"
+                ? "Agent Profile"
+                : "Tenant Profile"}
+            </h1>
+            <p className="text-sm text-zinc-500 leading-relaxed">
+              {loginMode
+                ? "Enter your credentials to access your unified workspace."
+                : "Select the workspace that best fits your professional needs."}
+            </p>
           </div>
-
-          {/* Title */}
-          <h1 className="text-[34px] font-bold tracking-tight text-[var(--foreground)]">
-            {loginMode
-              ? "Sign in to your workspace."
-              : step === 1
-              ? "Choose your workspace."
-              : selectedChoice?.id === "agent"
-              ? "Create your agent profile."
-              : "Create your tenant profile."}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-black/65">
-            {loginMode
-              ? "One global login for super admin, admins, agents, and locataires."
-              : "Pick an account type first. Administration is login-only."}
-          </p>
 
           {/* Progress bar */}
           {mode === "signup" && !loginMode ? (
-            <div className="mt-5 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-black/60">
-                <span>Step {step} of 3</span>
-                <span>{progress}%</span>
+            <div className="mb-10">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                <span>Account Setup</span>
+                <span className="text-zinc-900">{progress}%</span>
               </div>
-              <div className="h-1.5 rounded-full bg-[var(--muted)]">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
                 <div
-                  className="h-full rounded-full bg-[var(--primary)] transition-all duration-500"
+                  className="h-full rounded-full bg-zinc-900 transition-all duration-700 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
           ) : null}
 
-          <Separator className="my-6" />
-
-          {/* ── Step 1: Role selector ── */}
+          {/* ── Step 1: Immersive Selection Cards ── */}
           {mode === "signup" && step === 1 && !loginMode ? (
-            <div className="space-y-5 animate-fade-in-up">
-              <div className="grid gap-3">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+              <div className="grid gap-4">
                 {choices.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => selectChoice(item.id)}
-                    className="group flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 text-left transition-all hover:border-[rgba(1,73,124,0.3)] hover:shadow-[0_4px_16px_rgba(1,73,124,0.08)] hover:-translate-y-0.5"
+                    className="group relative flex items-center gap-5 rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-all duration-300 hover:border-zinc-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-zinc-900/5"
                   >
                     <span
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.iconClass} shadow-[0_4px_12px_rgba(0,0,0,0.16)] transition-transform group-hover:scale-105`}
+                      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${item.iconClass} transition-transform duration-300 group-hover:scale-110`}
                     >
                       <item.icon className="h-6 w-6" />
                     </span>
                     <span className="flex-1">
-                      <span className="block font-semibold text-[var(--foreground)]">
+                      <span className="block text-[17px] font-semibold text-zinc-900">
                         {item.label}
                       </span>
-                      <span className="mt-0.5 block text-sm text-black/65">
+                      <span className="mt-1 block text-[13px] text-zinc-500 leading-relaxed">
                         {item.description}
                       </span>
                     </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover:opacity-100" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-50 text-zinc-400 transition-all duration-300 group-hover:bg-zinc-900 group-hover:text-white group-hover:translate-x-1">
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
                   </button>
                 ))}
               </div>
-              <div className="text-center text-sm text-black/60">
+              <div className="text-center text-[13px] font-medium text-zinc-500 mt-8">
                 Already have an account?{" "}
                 <button
                   type="button"
-                  className="font-semibold text-[var(--primary)] underline-offset-4 hover:underline"
+                  className="text-zinc-900 hover:text-zinc-600 transition-colors underline-offset-4 hover:underline"
                   onClick={() => selectChoice("administration")}
                 >
-                  Sign in
+                  Sign in securely
                 </button>
               </div>
             </div>
           ) : (
-            <form className="space-y-5 animate-fade-in-up" onSubmit={handleCredentialSubmit}>
+            <form className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" onSubmit={handleCredentialSubmit}>
               {/* Back button */}
               {mode === "signup" && !loginMode ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  className="inline-flex items-center gap-2 text-[13px] font-semibold text-zinc-400 hover:text-zinc-900 transition-colors"
                   onClick={() => {
                     resetMessages();
                     setStep((current) => Math.max(1, current - 1));
@@ -420,312 +454,271 @@ function normalizeAuthError(value: string) {
                   }}
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  Back
+                  Go back
                 </button>
               ) : null}
 
               {/* Step 2 fields */}
               {mode === "signup" && !loginMode && step === 2 ? (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="first_name">First Name</Label>
+                <div className="space-y-5">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="first_name" className={labelClassName}>First name</Label>
                       <Input
                         id="first_name"
                         value={form.first_name}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, first_name: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, first_name: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="last_name">Last Name</Label>
+                    <div>
+                      <Label htmlFor="last_name" className={labelClassName}>Last name</Label>
                       <Input
                         id="last_name"
                         value={form.last_name}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, last_name: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, last_name: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="login">Username</Label>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="login" className={labelClassName}>Username</Label>
                       <Input
                         id="login"
                         value={form.login}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, login: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, login: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
+                    <div>
+                      <Label htmlFor="email" className={labelClassName}>Email address</Label>
                       <Input
                         id="email"
                         type="email"
                         value={form.email}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, email: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="phone" className={labelClassName}>Phone number</Label>
                       <Input
                         id="phone"
                         value={form.phone}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, phone: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, phone: e.target.value }))}
+                        className={inputClassName}
                       />
                     </div>
                     {choice === "agent" || choice === "locataire" ? (
-                      <div className="space-y-2">
-                        <Label htmlFor="avatar_image">Profile Image</Label>
-                        <label className="flex h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm text-[var(--muted-foreground)] hover:border-[var(--border-strong)] transition-colors">
-                          <ImageIcon className="h-4 w-4" />
-                          <span className="truncate">
-                            {preparingAvatar ? "Preparing image..." : avatarFile?.name ?? "Upload image"}
+                      <div>
+                        <Label htmlFor="avatar_image" className={labelClassName}>Profile picture</Label>
+                        <label className={`${inputClassName} flex cursor-pointer items-center gap-3 !px-4 hover:border-zinc-300`}>
+                          <ImageIcon className="h-4 w-4 text-zinc-400" />
+                          <span className="truncate text-zinc-600 text-[13px] font-medium">
+                            {preparingAvatar ? "Processing..." : avatarFile?.name ?? "Choose file"}
                           </span>
                           <input
                             id="avatar_image"
                             type="file"
                             accept="image/*"
                             className="sr-only"
-                            onChange={(e) =>
-                              void handleAvatarChange(e.target.files?.[0] ?? null)
-                            }
+                            onChange={(e) => void handleAvatarChange(e.target.files?.[0] ?? null)}
                           />
                         </label>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <Label htmlFor="date_naissance">Birth Date</Label>
+                      <div>
+                        <Label htmlFor="date_naissance" className={labelClassName}>Date of birth</Label>
                         <Input
                           id="date_naissance"
                           type="date"
                           value={form.date_naissance}
-                          onChange={(e) =>
-                            setForm((c) => ({
-                              ...c,
-                              date_naissance: e.target.value,
-                            }))
-                          }
-                          className="h-11 rounded-xl"
+                          onChange={(e) => setForm((c) => ({ ...c, date_naissance: e.target.value }))}
+                          className={inputClassName}
                         />
                       </div>
                     )}
                   </div>
                   {choice === "locataire" ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="adresse">Address</Label>
+                    <div>
+                      <Label htmlFor="adresse" className={labelClassName}>Home address</Label>
                       <Input
                         id="adresse"
                         value={form.adresse}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, adresse: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, adresse: e.target.value }))}
+                        className={inputClassName}
                       />
                     </div>
                   ) : null}
                   {avatarPreview ? (
                     <div
                       aria-label="Profile preview"
-                      className="h-20 w-20 rounded-2xl bg-cover bg-center shadow-[var(--shadow-sm)]"
+                      className="h-16 w-16 rounded-full bg-cover bg-center shadow-md border-2 border-white ring-1 ring-zinc-200"
                       style={{ backgroundImage: `url(${avatarPreview})` }}
                     />
                   ) : null}
-                </>
+                </div>
               ) : null}
 
               {/* Step 3 — password + review */}
               {mode === "signup" && !loginMode && step === 3 ? (
-                <>
-                  <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl icon-indigo shrink-0">
+                <div className="space-y-6">
+                  {/* Premium Profile Summary Card */}
+                  <div className="flex items-center gap-4 rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 shadow-sm">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shrink-0 shadow-md">
                       <Check className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="font-semibold text-[var(--foreground)]">
+                      <div className="font-semibold text-zinc-900">
                         {fullName()}
                       </div>
-                      <div className="text-sm text-[var(--muted-foreground)]">
+                      <div className="text-[13px] text-zinc-500 font-medium">
                         {selectedChoice?.label} · {form.email}
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="password" className={labelClassName}>Create password</Label>
                       <Input
                         id="password"
                         type="password"
                         value={form.password}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, password: e.target.value }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password_confirmation">
-                        Confirm Password
-                      </Label>
+                    <div>
+                      <Label htmlFor="password_confirmation" className={labelClassName}>Confirm password</Label>
                       <Input
                         id="password_confirmation"
                         type="password"
                         value={form.password_confirmation}
-                        onChange={(e) =>
-                          setForm((c) => ({
-                            ...c,
-                            password_confirmation: e.target.value,
-                          }))
-                        }
-                        className="h-11 rounded-xl"
+                        onChange={(e) => setForm((c) => ({ ...c, password_confirmation: e.target.value }))}
+                        className={inputClassName}
                         required
                       />
                     </div>
                   </div>
-                </>
+                </div>
               ) : null}
 
               {/* Login fields */}
               {loginMode ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="identifier">Email or Username</Label>
+                <div className="space-y-5">
+                  <div>
+                    <Label htmlFor="identifier" className={labelClassName}>Email or username</Label>
                     <div className="relative">
-                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                      <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
                       <Input
                         id="identifier"
                         value={form.identifier}
-                        onChange={(e) =>
-                          setForm((c) => ({
-                            ...c,
-                            identifier: e.target.value,
-                          }))
-                        }
-                        placeholder="name@company.com or username"
-                        className="h-11 rounded-xl pl-10"
+                        onChange={(e) => setForm((c) => ({ ...c, identifier: e.target.value }))}
+                        placeholder="name@company.com"
+                        className={`${inputClassName} pl-12`}
                         required
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                  <div>
+                    <Label htmlFor="password" className={labelClassName}>Password</Label>
                     <div className="relative">
-                      <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                      <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
                       <Input
                         id="password"
                         type="password"
                         value={form.password}
-                        onChange={(e) =>
-                          setForm((c) => ({ ...c, password: e.target.value }))
-                        }
-                        className="h-11 rounded-xl pl-10"
+                        onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
+                        placeholder="••••••••••••"
+                        className={`${inputClassName} pl-12`}
                         required
                       />
                     </div>
                   </div>
-                </>
+                </div>
               ) : null}
 
               {/* Status messages */}
               {message ? (
-                <div className="rounded-xl border border-[rgba(44,125,160,0.2)] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3.5 text-[13px] font-medium text-zinc-700 shadow-sm flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
                   {message}
                 </div>
               ) : null}
               {error ? (
-                <div className="rounded-xl border border-[rgba(1,42,74,0.2)] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-[13px] font-medium text-red-600 shadow-sm">
                   {error}
                 </div>
               ) : null}
 
-              {/* Action buttons */}
-              <div className="grid gap-3 pt-1">
+              {/* Action buttons - Sleek and modern */}
+              <div className="pt-4 space-y-4">
                 <Button
                   type="submit"
-                  size="lg"
                   disabled={pending || preparingAvatar}
-                  className="h-12 w-full rounded-xl bg-[var(--primary)] font-semibold shadow-[var(--shadow-primary)] hover:bg-[var(--primary-hover)] disabled:opacity-60"
+                  className="h-12 w-full rounded-xl bg-zinc-900 text-white font-semibold text-[14px] shadow-[0_4px_14px_0_rgb(24,24,27,0.25)] hover:shadow-[0_6px_20px_rgba(24,24,27,0.2)] hover:bg-zinc-800 disabled:opacity-50 transition-all duration-200 active:scale-[0.98]"
                 >
-                  {loginMode ? (
-                    <UserRound className="h-4 w-4" />
-                  ) : (
-                    <ShieldCheck className="h-4 w-4" />
-                  )}
                   {loginMode
                     ? preparingAvatar
-                      ? "Preparing image..."
+                      ? "Preparing..."
                       : pending
-                      ? "Signing in…"
+                      ? "Authenticating..."
                       : "Sign in"
                     : step === 3
                     ? preparingAvatar
-                      ? "Preparing image..."
+                      ? "Processing image..."
                       : pending
-                      ? "Creating…"
-                      : `Create ${selectedChoice?.label} account`
+                      ? "Creating account..."
+                      : `Create account`
                     : "Continue"}
                 </Button>
 
                 {googleAvailable ? (
                   <>
-                    <div className="relative flex items-center gap-3">
-                      <div className="h-px flex-1 bg-[var(--border)]" />
-                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                        or
+                    <div className="relative flex items-center gap-4 py-1">
+                      <div className="h-px flex-1 bg-zinc-200" />
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+                        Or continue with
                       </span>
-                      <div className="h-px flex-1 bg-[var(--border)]" />
+                      <div className="h-px flex-1 bg-zinc-200" />
                     </div>
                     <Button
                       type="button"
                       variant="outline"
-                      size="lg"
-                      className="h-12 w-full rounded-xl font-semibold hover:bg-white"
-                      onClick={() =>
-                        handleGoogle(loginMode ? "login" : "signup")
-                      }
+                      className="h-12 w-full rounded-xl border border-zinc-200 bg-white text-zinc-700 font-semibold text-[14px] shadow-sm hover:bg-zinc-50 hover:border-zinc-300 transition-all duration-200 active:scale-[0.98]"
+                      onClick={() => handleGoogle(loginMode ? "login" : "signup")}
                     >
-                      <Globe className="h-4 w-4" />
-                      Continue with Google
+                      <Globe className="h-4 w-4 mr-2 text-zinc-500" />
+                      Google
                     </Button>
                   </>
                 ) : null}
               </div>
+
+              {/* Bottom Nav Links */}
+              <div className="text-center text-[13px] font-medium text-zinc-500 pt-2">
+                {loginMode ? "Don't have an account? " : "Already have an account? "}
+                <Link
+                  href={loginMode ? "/signup" : "/login"}
+                  className="text-zinc-900 hover:text-zinc-600 transition-colors underline-offset-4 hover:underline"
+                >
+                  {loginMode ? "Sign up" : "Log in"}
+                </Link>
+              </div>
             </form>
           )}
 
-          {/* Footer link */}
-          <Separator className="my-6" />
-          <div className="flex items-center justify-between text-sm text-[var(--muted-foreground)]">
-            <span>
-              {loginMode ? "Need a new account?" : "Already registered?"}
-            </span>
-            <Link
-              href={loginMode ? "/signup" : "/login"}
-              className="inline-flex items-center gap-1.5 font-semibold text-[var(--primary)] underline-offset-4 hover:underline"
-            >
-              {loginMode ? "Choose account type" : "Go to login"}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+          {/* Footer Terms */}
+        
         </div>
       </div>
     </div>

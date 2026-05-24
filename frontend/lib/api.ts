@@ -74,6 +74,10 @@ export type TypeLogement = {
 export type Logement = {
   id: number;
   adresse: string;
+  latitude: string | null;
+  longitude: string | null;
+  city: string | null;
+  country: string | null;
   titre: string | null;
   description: string | null;
   superficie: string;
@@ -125,6 +129,8 @@ export type Paiement = {
   cash_note: string | null;
   statut: string;
   approved_by_tenant_at: string | null;
+  created_at?: string;
+  updated_at?: string;
   contrat: Contrat;
 };
 

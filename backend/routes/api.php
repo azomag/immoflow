@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/contrats/{contrat}', [ContratController::class, 'destroy']);
         Route::post('/paiements', [PaiementController::class, 'store']);
         Route::patch('/paiements/{paiement}/status', [PaiementController::class, 'updateStatus']);
+        Route::delete('/paiements/{paiement}', [PaiementController::class, 'destroy']);
     });
 
     Route::middleware('role:locataire')->group(function () {

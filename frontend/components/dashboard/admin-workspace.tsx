@@ -41,7 +41,6 @@ import {
   Check,
   Clock3,
   Ban,
-  MapPin,
 } from "lucide-react";
 import { gsap } from "gsap";
 import type {
@@ -57,7 +56,7 @@ import type {
 } from "@/lib/api";
 import { backendRequest } from "@/lib/api";
 import { getLandingUrl } from "@/lib/app-routes";
-import { downloadContractPdf } from "@/lib/document-pdf";
+import { downloadContractPdf, downloadReceiptPdf } from "@/lib/document-pdf";
 import { formatFileSize, prepareImagesForUpload } from "@/lib/image-upload";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
@@ -65,6 +64,7 @@ import { NotificationsPopover } from "@/components/dashboard/notifications-popov
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
+import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,14 +77,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  autoCommuneId,
   buildPropertySnapshot,
   downloadTextFile,
+  formatDateTime,
   formatLongDate,
   formatMoney,
   formatShortDate,
+  getLocalDateInputValue,
   initials,
+  PROPERTY_STATUS_OPTIONS,
+  propertyDisplaySubtitle,
+  propertyDisplayTitle,
   relativeTime,
   toneForStatus,
 } from "@/components/dashboard/workspace-utils";
@@ -113,6 +120,10 @@ function emptyPropertyForm() {
     type_logement_id: "",
     commune_id: "",
     adresse: "",
+    latitude: "",
+    longitude: "",
+    city: "",
+    country: "",
     titre: "",
     description: "",
     superficie: "",
@@ -122,9 +133,9 @@ function emptyPropertyForm() {
     etage: "",
     parking: false,
     chauffage: "",
-    statut_publication: "listed",
+    statut_publication: "disponible",
     locataire_id: "",
-    contrat_date_debut: new Date().toISOString().slice(0, 10),
+    contrat_date_debut: getLocalDateInputValue(),
     contrat_date_fin: "",
     contrat_statut: "active",
   };
@@ -164,6 +175,7 @@ export function AdminWorkspace({
   const [propertyImageViewer, setPropertyImageViewer] = useState<{ images: string[]; index: number } | null>(null);
   const [editingContractId, setEditingContractId] = useState<number | null>(null);
   const [contractDetails, setContractDetails] = useState<Contrat | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<Paiement | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +187,7 @@ export function AdminWorkspace({
   const [paymentForm, setPaymentForm] = useState({
     contrat_id: "",
     montant: "",
-    date_paiement: new Date().toISOString().slice(0, 10),
+    date_paiement: getLocalDateInputValue(),
     mode: "Virement",
     rib: "",
     reference: "",
@@ -255,6 +267,7 @@ export function AdminWorkspace({
           snapshot.logement.commune.nom,
           snapshot.logement.type_logement.nom_type,
           snapshot.logement.agent.user.name,
+          snapshot.status,
           snapshot.tenantName ?? "",
         ]
           .join(" ")
@@ -579,6 +592,7 @@ export function AdminWorkspace({
     setActiveTab(tab);
     setSelectedPropertyId(null);
     setContractDetails(null);
+    setPaymentDetails(null);
     setPropertyImageViewer(null);
     setSidebarOpen(false);
     resetPropertyEditor();
@@ -682,6 +696,10 @@ export function AdminWorkspace({
       type_logement_id: String(snapshot.logement.type_logement.id),
       commune_id: String(snapshot.logement.commune.id),
       adresse: snapshot.logement.adresse,
+      latitude: snapshot.logement.latitude ?? "",
+      longitude: snapshot.logement.longitude ?? "",
+      city: snapshot.logement.city ?? "",
+      country: snapshot.logement.country ?? "",
       titre: snapshot.logement.titre ?? "",
       description: snapshot.logement.description ?? "",
       superficie: snapshot.logement.superficie,
@@ -693,7 +711,7 @@ export function AdminWorkspace({
       chauffage: snapshot.logement.chauffage ?? "",
       statut_publication: snapshot.logement.statut_publication ?? "listed",
       locataire_id: String((snapshot.activeContract ?? snapshot.latestContract)?.locataire.id ?? ""),
-      contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? new Date().toISOString().slice(0, 10),
+      contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? getLocalDateInputValue(),
       contrat_date_fin: (snapshot.activeContract ?? snapshot.latestContract)?.date_fin ?? "",
       contrat_statut: (snapshot.activeContract ?? snapshot.latestContract)?.statut ?? "active",
     });
@@ -727,6 +745,10 @@ export function AdminWorkspace({
     payload.set("type_logement_id", propertyForm.type_logement_id);
     payload.set("commune_id", propertyForm.commune_id);
     payload.set("adresse", propertyForm.adresse);
+    payload.set("latitude", propertyForm.latitude);
+    payload.set("longitude", propertyForm.longitude);
+    payload.set("city", propertyForm.city);
+    payload.set("country", propertyForm.country);
     payload.set("titre", propertyForm.titre);
     payload.set("description", propertyForm.description);
     payload.set("superficie", propertyForm.superficie);
@@ -829,6 +851,31 @@ export function AdminWorkspace({
         cash_note: "",
         statut: "awaiting_tenant_approval",
       }));
+    });
+  }
+
+  async function handleDeletePayment(paiement: Paiement) {
+    const { default: Swal } = await import("sweetalert2");
+    const result = await Swal.fire({
+      title: "Delete payment?",
+      text: "This will permanently delete this payment record.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await runMutation(async () => {
+      await backendRequest(`/api/paiements/${paiement.id}`, { method: "DELETE" }, token);
+      setNotice("Payment deleted.");
+      if (paymentDetails?.id === paiement.id) {
+        setPaymentDetails(null);
+      }
     });
   }
 
@@ -1427,15 +1474,16 @@ export function AdminWorkspace({
         </button>
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
-              <MapPin className="h-3.5 w-3.5" />
-              {selectedProperty.logement.commune.nom}
-            </div>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--foreground)]">
-              {selectedProperty.logement.adresse}
+          <div className="min-w-0 max-w-4xl">
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)] sm:text-3xl line-clamp-2">
+              {propertyDisplayTitle(selectedProperty.logement)}
             </h1>
-            <div className="mt-2 flex items-center gap-3 text-sm font-medium text-[var(--muted-foreground)]">
+            {propertyDisplaySubtitle(selectedProperty.logement) ? (
+              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[var(--muted-foreground)] line-clamp-2">
+                {propertyDisplaySubtitle(selectedProperty.logement)}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--muted-foreground)]">
               <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[var(--foreground)]">
                 {selectedProperty.logement.type_logement.nom_type}
               </span>
@@ -1758,21 +1806,49 @@ export function AdminWorkspace({
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm w-full">
-          <div className="min-w-[920px]">
-            <div className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          <div className="min-w-[1020px]">
+            <div className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px_56px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
               <div>Tenant</div>
               <div>Property</div>
               <div>Amount</div>
               <div>Date</div>
               <div>Status</div>
+              <div />
             </div>
             {filteredPayments.map((paiement) => (
-              <div key={paiement.id} className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm last:border-b-0 hover:bg-slate-50/50 transition-colors">
+              <div key={paiement.id} className="grid grid-cols-[minmax(0,1fr)_1fr_140px_140px_140px_56px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm last:border-b-0 hover:bg-slate-50/50 transition-colors">
                 <div className="font-semibold text-[var(--foreground)]">{paiement.contrat.locataire.user.name}</div>
                 <div className="text-[var(--muted-foreground)]">{paiement.contrat.logement.adresse}</div>
                 <div className="font-medium text-[var(--foreground)]">{formatMoney(paiement.montant)} MAD</div>
                 <div className="text-[var(--muted-foreground)]">{formatShortDate(paiement.date_paiement)}</div>
                 <div><Badge variant={toneForStatus(paiement.statut)}>{paiement.statut}</Badge></div>
+                <div className="flex justify-end">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Payment actions"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm transition-colors hover:bg-slate-50 hover:text-[var(--foreground)]"
+                      >
+                        <Ellipsis className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                      <DropdownMenuItem onClick={() => setPaymentDetails(paiement)}>
+                        <Eye className="mr-2 h-4 w-4 text-[var(--muted-foreground)]" />
+                        Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => downloadReceiptPdf(paiement)}>
+                        <FileDown className="mr-2 h-4 w-4 text-emerald-600" />
+                        Download PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => void handleDeletePayment(paiement)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             ))}
           </div>
@@ -1852,7 +1928,11 @@ export function AdminWorkspace({
 
         <div className="flex overflow-x-auto items-center gap-2 border-b border-[var(--border)] pb-4 hide-scrollbar">
           {(role === "super_admin"
-            ? [{ id: "admins", label: "Admins", count: adminUsers.length }]
+            ? [
+                { id: "admins", label: "Admins", count: adminUsers.length },
+                { id: "agents", label: "Agents", count: agentUsers.length },
+                { id: "locataires", label: "Tenants", count: tenantUsers.length },
+              ]
             : [
                 { id: "agents", label: "Agents", count: agentUsers.length },
                 { id: "locataires", label: "Tenants", count: tenantUsers.length },
@@ -2048,7 +2128,7 @@ export function AdminWorkspace({
   
   {/* Create/Edit Property Dialog */}
   <Dialog open={propertyPanelOpen} onOpenChange={setPropertyPanelOpen}>
-    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[700px] w-[95vw]">
+    <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[700px] w-[95vw]">
       <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
         <DialogTitle className="text-xl font-bold">
           {editingPropertyId ? "Edit Property" : "Add Property"}
@@ -2070,28 +2150,62 @@ export function AdminWorkspace({
           <>
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Agent Assignment</Label>
-              <select
-                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
-                value={propertyForm.agent_id}
-                onChange={(event) =>
-                  setPropertyForm((current) => ({ ...current, agent_id: event.target.value }))
+              <Select
+                value={propertyForm.agent_id || "unassigned"}
+                onValueChange={(value) =>
+                  setPropertyForm((current) => ({ ...current, agent_id: value === "unassigned" ? "" : value }))
                 }
               >
-                <option value="">Select an agent</option>
-                {agentUsers.map((entry) => (
-                  <option key={entry.id} value={entry.agent_profile?.id ?? ""}>{entry.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="unassigned">Select an agent</SelectItem>
+                  {agentUsers
+                    .filter((entry) => entry.agent_profile?.id)
+                    .map((entry) => (
+                      <SelectItem key={entry.id} value={String(entry.agent_profile?.id)}>
+                        {entry.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Property Address</Label>
               <Input
-                className="h-11 rounded-xl"
+                className="h-11 rounded-xl truncate"
+                maxLength={120}
                 placeholder="e.g. 123 Main St, Apt 4B"
                 value={propertyForm.adresse}
                 onChange={(event) =>
                   setPropertyForm((current) => ({ ...current, adresse: event.target.value }))
+                }
+                title={propertyForm.adresse}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Location</Label>
+              <LocationPicker
+                value={{
+                  latitude: propertyForm.latitude !== "" ? Number.parseFloat(propertyForm.latitude) : null,
+                  longitude: propertyForm.longitude !== "" ? Number.parseFloat(propertyForm.longitude) : null,
+                  address: propertyForm.adresse,
+                  city: propertyForm.city,
+                  country: propertyForm.country,
+                }}
+                onChange={(location) =>
+                  setPropertyForm((current) => ({
+                    ...current,
+                    adresse: location.address || current.adresse,
+                    commune_id: autoCommuneId(communes, location),
+                    latitude: location.latitude !== null ? String(location.latitude) : "",
+                    longitude: location.longitude !== null ? String(location.longitude) : "",
+                    city: location.city,
+                    country: location.country,
+                  }))
                 }
               />
             </div>
@@ -2099,35 +2213,26 @@ export function AdminWorkspace({
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Property Type</Label>
-                <select
-                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
-                  value={propertyForm.type_logement_id}
-                  onChange={(event) =>
-                    setPropertyForm((current) => ({ ...current, type_logement_id: event.target.value }))
+                <Select
+                  value={propertyForm.type_logement_id || "none"}
+                  onValueChange={(value) =>
+                    setPropertyForm((current) => ({ ...current, type_logement_id: value === "none" ? "" : value }))
                   }
                 >
-                  <option value="">Select type</option>
-                  {types.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.nom_type}</option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="none">Select type</SelectItem>
+                    {types.map((entry) => (
+                      <SelectItem key={entry.id} value={String(entry.id)}>
+                        {entry.nom_type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Commune / Area</Label>
-                <select
-                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
-                  value={propertyForm.commune_id}
-                  onChange={(event) =>
-                    setPropertyForm((current) => ({ ...current, commune_id: event.target.value }))
-                  }
-                >
-                  <option value="">Select commune</option>
-                  {communes.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.nom}</option>
-                  ))}
-                </select>
-              </div>
             </div>
           </>
         ) : (
@@ -2155,20 +2260,48 @@ export function AdminWorkspace({
                   }
                 />
               </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Property status</Label>
+                <Select
+                  value={propertyForm.statut_publication}
+                  onValueChange={(value) =>
+                    setPropertyForm((current) => ({ ...current, statut_publication: value }))
+                  }
+                >
+                  <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {PROPERTY_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-4 rounded-xl border border-[var(--border)] bg-slate-50/50 p-4 sm:p-5">
               <Label className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Tenant Assignment</Label>
-              <select
-                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
-                value={propertyForm.locataire_id}
-                onChange={(event) => setPropertyForm((current) => ({ ...current, locataire_id: event.target.value }))}
+              <Select
+                value={propertyForm.locataire_id || "vacant"}
+                onValueChange={(value) => setPropertyForm((current) => ({ ...current, locataire_id: value === "vacant" ? "" : value }))}
               >
-                <option value="">Keep property vacant</option>
-                {tenantUsers.map((entry) => (
-                  <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>{entry.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="vacant">Keep property vacant</SelectItem>
+                  {tenantUsers
+                    .filter((entry) => entry.locataire_profile?.id)
+                    .map((entry) => (
+                      <SelectItem key={entry.id} value={String(entry.locataire_profile?.id)}>
+                        {entry.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               
               {propertyForm.locataire_id ? (
                 <div className="grid gap-4 sm:grid-cols-3 pt-2">
@@ -2192,14 +2325,18 @@ export function AdminWorkspace({
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[11px] text-[var(--muted-foreground)]">Status</Label>
-                    <select
-                      className="h-10 w-full rounded-lg border border-[var(--border)] bg-white px-2 text-sm outline-none focus:border-[var(--primary)]"
+                    <Select
                       value={propertyForm.contrat_statut}
-                      onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_statut: event.target.value }))}
+                      onValueChange={(value) => setPropertyForm((current) => ({ ...current, contrat_statut: value }))}
                     >
-                      <option value="active">Active</option>
-                      <option value="pending">Pending</option>
-                    </select>
+                      <SelectTrigger className="h-10 w-full rounded-lg bg-white text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ) : null}
@@ -2286,7 +2423,7 @@ export function AdminWorkspace({
           {propertyWizardStep === 0 ? (
             <Button
               className="w-full sm:w-auto rounded-xl shadow-sm px-6"
-              disabled={!propertyForm.agent_id || !propertyForm.type_logement_id || !propertyForm.commune_id || !propertyForm.adresse || busy}
+              disabled={!propertyForm.agent_id || !propertyForm.type_logement_id || !propertyForm.adresse || busy}
               onClick={() => setPropertyWizardStep(1)}
             >
               Continue
@@ -2646,6 +2783,54 @@ export function AdminWorkspace({
     </DialogContent>
   </Dialog>
 
+  <Dialog open={Boolean(paymentDetails)} onOpenChange={(open) => !open && setPaymentDetails(null)}>
+    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[640px]">
+      <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+        <DialogTitle className="text-xl font-bold">Payment details</DialogTitle>
+      </DialogHeader>
+      {paymentDetails ? (
+        <div className="space-y-5 px-6 py-6">
+          <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Payment ref</div>
+              <div className="mt-1 font-mono text-lg font-bold">PM-{String(paymentDetails.id).padStart(4, "0")}</div>
+            </div>
+            <Badge variant={toneForStatus(paymentDetails.statut)}>{paymentDetails.statut}</Badge>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { label: "Tenant", value: paymentDetails.contrat.locataire.user.name },
+              { label: "Property", value: paymentDetails.contrat.logement.adresse },
+              { label: "Amount", value: `${formatMoney(paymentDetails.montant)} MAD` },
+              { label: "Payment Date", value: formatShortDate(paymentDetails.date_paiement) },
+              { label: "Recorded at", value: formatDateTime(paymentDetails.created_at ?? null) },
+              { label: "Approved at", value: formatDateTime(paymentDetails.approved_by_tenant_at) },
+              { label: "Method", value: paymentDetails.mode },
+              { label: "Reference", value: paymentDetails.reference ?? paymentDetails.rib ?? paymentDetails.cash_note ?? "N/A" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-[var(--border)] bg-white p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{item.label}</div>
+                <div className="mt-1 break-words text-sm font-semibold text-[var(--foreground)]">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="rounded-xl bg-white" onClick={() => downloadReceiptPdf(paymentDetails)}>
+              <FileDown className="h-4 w-4" />
+              Download PDF
+            </Button>
+            <Button variant="danger" className="rounded-xl" onClick={() => void handleDeletePayment(paymentDetails)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </DialogContent>
+  </Dialog>
+
   {/* Record Payment Dialog */}
   <Dialog open={paymentWizardOpen} onOpenChange={setPaymentWizardOpen}>
     <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px]">
@@ -2848,14 +3033,9 @@ export function AdminWorkspace({
                   setUserForm((current) => ({ ...current, role: event.target.value }))
                 }
               >
-                {role === "super_admin" ? (
-                  <option value="admin">Admin</option>
-                ) : (
-                  <>
-                    <option value="agent">Agent</option>
-                    <option value="locataire">Tenant</option>
-                  </>
-                )}
+                {role === "super_admin" ? <option value="admin">Admin</option> : null}
+                <option value="agent">Agent</option>
+                <option value="locataire">Tenant</option>
               </select>
             </div>
             <div className="space-y-2">

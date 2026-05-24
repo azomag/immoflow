@@ -45,7 +45,7 @@ class UserController extends Controller
         $actor = $request->user();
 
         $allowedRoles = $actor->role === 'super_admin'
-            ? ['admin']
+            ? ['admin', 'agent', 'locataire']
             : ['agent', 'locataire'];
 
         $validated = $request->validate([
@@ -150,12 +150,6 @@ class UserController extends Controller
         if ($actor->role === 'admin' && ! in_array($user->role, ['agent', 'locataire'], true)) {
             return response()->json([
                 'message' => 'Admins can only manage agents and locataires.',
-            ], 403);
-        }
-
-        if ($actor->role === 'super_admin' && $user->role !== 'admin') {
-            return response()->json([
-                'message' => 'Super admin approval here is limited to admin accounts.',
             ], 403);
         }
 

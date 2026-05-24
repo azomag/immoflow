@@ -127,7 +127,7 @@ export default function Hero() {
 
       <div
         ref={contentWrapperRef}
-        className="relative z-10 container mx-auto flex h-full flex-col items-center justify-start px-6 pb-24 pt-28 text-center text-white sm:pb-16 md:justify-center"
+        className="relative -top-20 z-10 container mx-auto flex h-full flex-col items-center justify-start px-6 pb-24 pt-28 text-center text-white sm:pb-16 md:justify-center"
       >
         <div ref={badgeRef} className="opacity-0">
           <div className="glass-dark mb-8 inline-flex items-center gap-2 rounded-full px-5 py-2.5">

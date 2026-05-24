@@ -1,6 +1,10 @@
 export type PublicProperty = {
   id: number;
   adresse: string;
+  latitude: string | null;
+  longitude: string | null;
+  city: string | null;
+  country: string | null;
   titre: string | null;
   description: string | null;
   superficie: string;
@@ -50,6 +54,10 @@ export const fallbackPublicProperties: PublicProperty[] = [
   {
     id: 1,
     adresse: "Casablanca Finance City",
+    latitude: "33.5731000",
+    longitude: "-7.5898000",
+    city: "Casablanca",
+    country: "Morocco",
     titre: "Palm View Residence",
     description:
       "Appartement lumineux avec salon ouvert, finitions modernes, cuisine equipee et acces rapide aux services du quartier.",
@@ -60,7 +68,7 @@ export const fallbackPublicProperties: PublicProperty[] = [
     etage: "4",
     parking: true,
     chauffage: "Climatisation reversible",
-    statut_publication: "listed",
+    statut_publication: "disponible",
     images: ["/images/property-1.png", "/images/property-2.png", "/images/property-3.png"],
     commune: { id: 1, nom: "Casablanca" },
     type_logement: { id: 1, nom_type: "Appartement" },
@@ -73,6 +81,10 @@ export const fallbackPublicProperties: PublicProperty[] = [
   {
     id: 2,
     adresse: "Agdal, Rabat",
+    latitude: "34.0084000",
+    longitude: "-6.8539000",
+    city: "Rabat",
+    country: "Morocco",
     titre: "Residence Horizon",
     description:
       "Logement familial proche des transports, avec espaces bien distribues, chambres calmes et bonne exposition.",
@@ -83,7 +95,7 @@ export const fallbackPublicProperties: PublicProperty[] = [
     etage: "2",
     parking: true,
     chauffage: "Central",
-    statut_publication: "listed",
+    statut_publication: "disponible",
     images: ["/images/property-2.png", "/images/property-1.png", "/images/property-3.png"],
     commune: { id: 2, nom: "Rabat" },
     type_logement: { id: 2, nom_type: "Appartement familial" },
@@ -96,6 +108,10 @@ export const fallbackPublicProperties: PublicProperty[] = [
   {
     id: 3,
     adresse: "Marina Bay, Tanger",
+    latitude: "35.7595000",
+    longitude: "-5.8340000",
+    city: "Tangier",
+    country: "Morocco",
     titre: "Marina Loft",
     description:
       "Loft contemporain avec vue degagee, grande piece de vie, coin nuit confortable et acces direct au front de mer.",
@@ -106,7 +122,7 @@ export const fallbackPublicProperties: PublicProperty[] = [
     etage: "7",
     parking: false,
     chauffage: "Electrique",
-    statut_publication: "listed",
+    statut_publication: "disponible",
     images: ["/images/property-3.png", "/images/property-2.png", "/images/property-1.png"],
     commune: { id: 3, nom: "Tanger" },
     type_logement: { id: 3, nom_type: "Loft" },

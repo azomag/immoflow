@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const AUTH_COOKIE_NAMES = [
   "next-auth.session-token",
   "__Secure-next-auth.session-token",
+  "__Host-next-auth.session-token",
   "next-auth.callback-url",
   "__Secure-next-auth.callback-url",
   "next-auth.csrf-token",
@@ -31,8 +32,19 @@ function safeCallbackUrl(value: string | null) {
 export function GET(request: NextRequest) {
   const callbackUrl = safeCallbackUrl(request.nextUrl.searchParams.get("callbackUrl"));
   const response = NextResponse.redirect(callbackUrl);
+  const cookieNames = new Set(AUTH_COOKIE_NAMES);
 
-  for (const name of AUTH_COOKIE_NAMES) {
+  for (const cookie of request.cookies.getAll()) {
+    if (
+      cookie.name.startsWith("next-auth.") ||
+      cookie.name.startsWith("__Secure-next-auth.") ||
+      cookie.name.startsWith("__Host-next-auth.")
+    ) {
+      cookieNames.add(cookie.name);
+    }
+  }
+
+  for (const name of cookieNames) {
     response.cookies.set(name, "", {
       path: "/",
       expires: new Date(0),

@@ -41,7 +41,7 @@ return new class extends Migration
             }
 
             if (! Schema::hasColumn('logements', 'statut_publication')) {
-                $table->string('statut_publication')->default('listed')->after('chauffage');
+                $table->string('statut_publication')->default('disponible')->after('chauffage');
             }
 
             if (! Schema::hasColumn('logements', 'images')) {

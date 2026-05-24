@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Agent;
+use App\Models\Commune;
 use App\Models\Logement;
 use App\Models\User;
 use App\Support\DashboardNotification;
@@ -14,12 +15,22 @@ use Illuminate\Support\Str;
 
 class LogementController extends Controller
 {
+    private const PUBLIC_STATUSES = ['disponible', 'listed'];
+    private const MANAGED_STATUSES = [
+        'disponible',
+        'en_cours_reservation',
+        'reserve',
+        'listed',
+        'draft',
+        'maintenance',
+    ];
+
     public function publicIndex(): JsonResponse
     {
         return response()->json([
             'logements' => Logement::query()
                 ->with(['agent.user', 'commune', 'typeLogement'])
-                ->where('statut_publication', 'listed')
+                ->whereIn('statut_publication', self::PUBLIC_STATUSES)
                 ->latest()
                 ->get(),
         ]);
@@ -27,7 +38,7 @@ class LogementController extends Controller
 
     public function publicShow(Logement $logement): JsonResponse
     {
-        if ($logement->statut_publication !== 'listed') {
+        if (! in_array($logement->statut_publication, self::PUBLIC_STATUSES, true)) {
             abort(404);
         }
 
@@ -60,8 +71,12 @@ class LogementController extends Controller
         $validated = $request->validate([
             'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
             'type_logement_id' => ['required', 'integer', 'exists:type_logements,id'],
-            'commune_id' => ['required', 'integer', 'exists:communes,id'],
+            'commune_id' => ['nullable', 'integer', 'exists:communes,id'],
             'adresse' => ['required', 'string', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'country' => ['nullable', 'string', 'max:255'],
             'titre' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'superficie' => ['required', 'numeric', 'min:0'],
@@ -71,7 +86,7 @@ class LogementController extends Controller
             'etage' => ['nullable', 'string', 'max:50'],
             'parking' => ['nullable', 'boolean'],
             'chauffage' => ['nullable', 'string', 'max:100'],
-            'statut_publication' => ['nullable', 'string', 'max:50'],
+            'statut_publication' => ['nullable', 'string', 'in:'.implode(',', self::MANAGED_STATUSES)],
             'images' => ['nullable', 'array'],
             'images.*' => ['nullable', 'string', 'max:2048'],
             'image_files' => ['nullable', 'array', 'max:10'],
@@ -95,11 +110,17 @@ class LogementController extends Controller
             ], 422);
         }
 
+        $communeId = $this->resolveCommuneId($validated);
+
         $logement = Logement::create([
             'agent_id' => $agentId,
             'type_logement_id' => $validated['type_logement_id'],
-            'commune_id' => $validated['commune_id'],
+            'commune_id' => $communeId,
             'adresse' => $validated['adresse'],
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'city' => $validated['city'] ?? null,
+            'country' => $validated['country'] ?? null,
             'titre' => $validated['titre'] ?? null,
             'description' => $validated['description'] ?? null,
             'superficie' => $validated['superficie'],
@@ -109,7 +130,7 @@ class LogementController extends Controller
             'etage' => $validated['etage'] ?? null,
             'parking' => $validated['parking'] ?? false,
             'chauffage' => $validated['chauffage'] ?? null,
-            'statut_publication' => $validated['statut_publication'] ?? 'listed',
+            'statut_publication' => $validated['statut_publication'] ?? 'disponible',
             'images' => $this->collectImages($request, $validated['images'] ?? []),
         ]);
 
@@ -145,8 +166,12 @@ class LogementController extends Controller
         $validated = $request->validate([
             'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
             'type_logement_id' => ['required', 'integer', 'exists:type_logements,id'],
-            'commune_id' => ['required', 'integer', 'exists:communes,id'],
+            'commune_id' => ['nullable', 'integer', 'exists:communes,id'],
             'adresse' => ['required', 'string', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'country' => ['nullable', 'string', 'max:255'],
             'titre' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'superficie' => ['required', 'numeric', 'min:0'],
@@ -156,7 +181,7 @@ class LogementController extends Controller
             'etage' => ['nullable', 'string', 'max:50'],
             'parking' => ['nullable', 'boolean'],
             'chauffage' => ['nullable', 'string', 'max:100'],
-            'statut_publication' => ['nullable', 'string', 'max:50'],
+            'statut_publication' => ['nullable', 'string', 'in:'.implode(',', self::MANAGED_STATUSES)],
             'images' => ['nullable', 'array'],
             'images.*' => ['nullable', 'string', 'max:2048'],
             'image_files' => ['nullable', 'array', 'max:10'],
@@ -180,11 +205,17 @@ class LogementController extends Controller
             ], 422);
         }
 
+        $communeId = $this->resolveCommuneId($validated, $logement->commune_id);
+
         $logement->update([
             'agent_id' => $agentId,
             'type_logement_id' => $validated['type_logement_id'],
-            'commune_id' => $validated['commune_id'],
+            'commune_id' => $communeId,
             'adresse' => $validated['adresse'],
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'city' => $validated['city'] ?? null,
+            'country' => $validated['country'] ?? null,
             'titre' => $validated['titre'] ?? null,
             'description' => $validated['description'] ?? null,
             'superficie' => $validated['superficie'],
@@ -194,7 +225,7 @@ class LogementController extends Controller
             'etage' => $validated['etage'] ?? null,
             'parking' => $validated['parking'] ?? false,
             'chauffage' => $validated['chauffage'] ?? null,
-            'statut_publication' => $validated['statut_publication'] ?? 'listed',
+            'statut_publication' => $validated['statut_publication'] ?? $logement->statut_publication ?? 'disponible',
             'images' => $this->collectImages($request, $validated['images'] ?? []),
         ]);
 
@@ -290,6 +321,61 @@ class LogementController extends Controller
             'image_files.*.image' => 'Only image files are allowed.',
             'image_files.*.max' => 'Each image must be 2 MB or less.',
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function resolveCommuneId(array $validated, ?int $fallbackId = null): int
+    {
+        if (! empty($validated['commune_id'])) {
+            return (int) $validated['commune_id'];
+        }
+
+        $candidates = array_values(array_filter([
+            $validated['city'] ?? null,
+            $this->extractHayName((string) ($validated['adresse'] ?? '')),
+            ...explode(',', (string) ($validated['adresse'] ?? '')),
+        ], fn ($value) => is_string($value) && trim($value) !== ''));
+
+        foreach ($candidates as $candidate) {
+            $candidate = Str::lower(trim($candidate));
+            $matched = Commune::query()
+                ->get()
+                ->first(function (Commune $commune) use ($candidate): bool {
+                    $communeName = Str::lower($commune->nom);
+
+                    return $candidate === $communeName ||
+                        str_contains($candidate, $communeName) ||
+                        str_contains($communeName, $candidate);
+                });
+
+            if ($matched) {
+                return $matched->id;
+            }
+        }
+
+        $name = trim((string) ($validated['city'] ?? ''))
+            ?: trim($this->extractHayName((string) ($validated['adresse'] ?? '')))
+            ?: trim(explode(',', (string) ($validated['adresse'] ?? ''))[0] ?? '')
+            ?: 'Auto detected area';
+
+        return Commune::query()->firstOrCreate(
+            ['nom' => Str::limit($name, 255, '')],
+            [
+                'nombre_habitants' => 0,
+                'distance_agence' => 0,
+            ],
+        )->id ?: (int) $fallbackId;
+    }
+
+    private function extractHayName(string $address): ?string
+    {
+        if (preg_match('/(?:^|,\s*)(hay\s+[^,]+)/i', $address, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return null;
     }
 
     /**

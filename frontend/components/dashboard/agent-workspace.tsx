@@ -35,7 +35,6 @@ import {
   Users,
   Trash2,
   X,
-  MapPin,
   Check,
   Clock3,
   Ban
@@ -54,13 +53,14 @@ import type {
 import { backendRequest } from "@/lib/api";
 import { getLandingUrl } from "@/lib/app-routes";
 import { formatFileSize, prepareImagesForUpload } from "@/lib/image-upload";
-import { downloadContractPdf } from "@/lib/document-pdf";
+import { downloadContractPdf, downloadReceiptPdf } from "@/lib/document-pdf";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AvatarMenu } from "@/components/dashboard/avatar-menu";
 import { NotificationsPopover } from "@/components/dashboard/notifications-popover";
 import { NotificationsPanel } from "@/components/dashboard/notifications-panel";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
 import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
+import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,13 +73,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  autoCommuneId,
   buildPropertySnapshot,
+  formatDateTime,
   formatLongDate,
   formatMoney,
   formatShortDate,
+  getLocalDateInputValue,
   initials,
+  PROPERTY_STATUS_OPTIONS,
+  propertyDisplaySubtitle,
+  propertyDisplayTitle,
   relativeTime,
   toneForStatus,
 } from "@/components/dashboard/workspace-utils";
@@ -105,6 +112,10 @@ function emptyPropertyForm() {
     type_logement_id: "",
     commune_id: "",
     adresse: "",
+    latitude: "",
+    longitude: "",
+    city: "",
+    country: "",
     titre: "",
     description: "",
     superficie: "",
@@ -114,10 +125,10 @@ function emptyPropertyForm() {
     etage: "",
     parking: false,
     chauffage: "",
-    statut_publication: "listed",
+    statut_publication: "disponible",
     images_text: "",
     locataire_id: "",
-    contrat_date_debut: new Date().toISOString().slice(0, 10),
+    contrat_date_debut: getLocalDateInputValue(),
     contrat_date_fin: "",
     contrat_statut: "active",
   };
@@ -152,6 +163,7 @@ export function AgentWorkspace({
   const [propertyImageViewer, setPropertyImageViewer] = useState<{ images: string[]; index: number } | null>(null);
   const [editingContractId, setEditingContractId] = useState<number | null>(null);
   const [contractDetails, setContractDetails] = useState<Contrat | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<Paiement | null>(null);
   const [tenantDetails, setTenantDetails] = useState<UserRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -161,7 +173,6 @@ export function AgentWorkspace({
   const [propertyImageFiles, setPropertyImageFiles] = useState<File[]>([]);
   const [propertyImagePreviewUrls, setPropertyImagePreviewUrls] = useState<string[]>([]);
   const [preparingImages, setPreparingImages] = useState(false);
-  const [communeDraft, setCommuneDraft] = useState({ nom: "", nombre_habitants: "", distance_agence: "" });
   const [contratForm, setContratForm] = useState({
     locataire_id: "",
     logement_id: "",
@@ -182,7 +193,7 @@ export function AgentWorkspace({
   const [paymentForm, setPaymentForm] = useState({
     contrat_id: "",
     montant: "",
-    date_paiement: new Date().toISOString().slice(0, 10),
+    date_paiement: getLocalDateInputValue(),
     mode: "Virement",
     rib: "",
     reference: "",
@@ -217,6 +228,7 @@ export function AgentWorkspace({
         snapshot.logement.adresse,
         snapshot.logement.commune.nom,
         snapshot.logement.type_logement.nom_type,
+        snapshot.status,
         snapshot.tenantName ?? "",
       ]
         .join(" ")
@@ -451,7 +463,6 @@ export function AgentWorkspace({
     setPropertyExistingImages([]);
     setPropertyImageFiles([]);
     setPropertyImagePreviewUrls([]);
-    setCommuneDraft({ nom: "", nombre_habitants: "", distance_agence: "" });
     setPropertyWizardStep(0);
   }
 
@@ -459,6 +470,7 @@ export function AgentWorkspace({
     setActiveTab(tab);
     setSelectedPropertyId(null);
     setContractDetails(null);
+    setPaymentDetails(null);
     setTenantDetails(null);
     setPropertyImageViewer(null);
     setSidebarOpen(false);
@@ -475,6 +487,10 @@ export function AgentWorkspace({
       type_logement_id: String(snapshot.logement.type_logement.id),
       commune_id: String(snapshot.logement.commune.id),
       adresse: snapshot.logement.adresse,
+      latitude: snapshot.logement.latitude ?? "",
+      longitude: snapshot.logement.longitude ?? "",
+      city: snapshot.logement.city ?? "",
+      country: snapshot.logement.country ?? "",
       titre: snapshot.logement.titre ?? "",
       description: snapshot.logement.description ?? "",
       superficie: snapshot.logement.superficie,
@@ -487,14 +503,13 @@ export function AgentWorkspace({
       statut_publication: snapshot.logement.statut_publication ?? "listed",
       images_text: "",
       locataire_id: String((snapshot.activeContract ?? snapshot.latestContract)?.locataire.id ?? ""),
-      contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? new Date().toISOString().slice(0, 10),
+      contrat_date_debut: (snapshot.activeContract ?? snapshot.latestContract)?.date_debut ?? getLocalDateInputValue(),
       contrat_date_fin: (snapshot.activeContract ?? snapshot.latestContract)?.date_fin ?? "",
       contrat_statut: (snapshot.activeContract ?? snapshot.latestContract)?.statut ?? "active",
     });
     setPropertyExistingImages(snapshot.logement.images ?? []);
     setPropertyImageFiles([]);
     setPropertyImagePreviewUrls([]);
-    setCommuneDraft({ nom: "", nombre_habitants: "", distance_agence: "" });
     setPropertyWizardStep(0);
     setPropertyWizardOpen(true);
   }
@@ -585,21 +600,6 @@ export function AgentWorkspace({
   }
 
   async function handlePropertySubmit() {
-    let communeId = propertyForm.commune_id;
-
-    if (!communeId && communeDraft.nom.trim()) {
-      const communeResponse = await backendRequest<{ commune: Commune }>("/api/communes", {
-        method: "POST",
-        body: JSON.stringify({
-          nom: communeDraft.nom.trim(),
-          nombre_habitants: Number(communeDraft.nombre_habitants || 0),
-          distance_agence: Number(communeDraft.distance_agence || 0),
-        }),
-      }, token);
-      communeId = String(communeResponse.commune.id);
-      setPropertyForm((current) => ({ ...current, commune_id: communeId }));
-    }
-
     const totalImages = propertyExistingImages.length + propertyImageFiles.length;
     if (totalImages < 2 || totalImages > 10) {
       setError("Each property must have between 2 and 10 images.");
@@ -608,8 +608,12 @@ export function AgentWorkspace({
 
     const payload = new FormData();
     payload.set("type_logement_id", propertyForm.type_logement_id);
-    payload.set("commune_id", communeId);
+    payload.set("commune_id", propertyForm.commune_id);
     payload.set("adresse", propertyForm.adresse);
+    payload.set("latitude", propertyForm.latitude);
+    payload.set("longitude", propertyForm.longitude);
+    payload.set("city", propertyForm.city);
+    payload.set("country", propertyForm.country);
     payload.set("titre", propertyForm.titre);
     payload.set("description", propertyForm.description);
     payload.set("superficie", propertyForm.superficie);
@@ -757,6 +761,29 @@ export function AgentWorkspace({
       setPaymentWizardOpen(false);
       setPaymentWizardStep(0);
       setNotice("Payment recorded and sent to the tenant for approval.");
+    });
+  }
+
+  async function handleDeletePayment(paiement: Paiement) {
+    const { default: Swal } = await import("sweetalert2");
+    const result = await Swal.fire({
+      title: "Delete payment?",
+      text: "This will permanently delete this payment record.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+    });
+
+    if (!result.isConfirmed) return;
+
+    await runMutation(async () => {
+      await backendRequest(`/api/paiements/${paiement.id}`, { method: "DELETE" }, token);
+      setNotice("Payment deleted.");
+      if (paymentDetails?.id === paiement.id) {
+        setPaymentDetails(null);
+      }
     });
   }
 
@@ -1226,14 +1253,21 @@ export function AgentWorkspace({
                 </button>
 
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {selectedProperty.logement.commune.nom}
-                    </div>
-                    <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--foreground)]">
-                      {selectedProperty.logement.adresse}
+                  <div className="min-w-0 max-w-4xl">
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)] sm:text-3xl line-clamp-2">
+                      {propertyDisplayTitle(selectedProperty.logement)}
                     </h1>
+                    {propertyDisplaySubtitle(selectedProperty.logement) ? (
+                      <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[var(--muted-foreground)] line-clamp-2">
+                        {propertyDisplaySubtitle(selectedProperty.logement)}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--muted-foreground)]">
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[var(--foreground)]">
+                        {selectedProperty.logement.type_logement.nom_type}
+                      </span>
+                      <span>Ref: {selectedProperty.ref}</span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="outline" className="flex-1 sm:flex-none rounded-xl shadow-sm bg-white" onClick={() => handleShareProperty(selectedProperty)}>
@@ -1504,14 +1538,15 @@ export function AgentWorkspace({
                   <div className="w-full overflow-x-auto hide-scrollbar">
                     
                     {/* Full width responsive grid */}
-                    <div className="min-w-[900px]">
-                      <div className="grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_180px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                    <div className="min-w-[980px]">
+                      <div className="grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_160px_56px] gap-4 border-b border-[var(--border)] bg-slate-50/50 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                         <div>ID</div>
                         <div>Tenant</div>
                         <div>Agent</div>
                         <div>Amount</div>
                         <div>Date</div>
                         <div>Status</div>
+                        <div />
                       </div>
 
                       {filteredPayments.map((paiement) => {
@@ -1521,7 +1556,7 @@ export function AgentWorkspace({
                         return (
                           <div
                             key={paiement.id}
-                            className="group grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_180px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm transition-colors hover:bg-slate-50/50 last:border-b-0"
+                            className="group grid grid-cols-[100px_minmax(0,1.5fr)_minmax(0,1.5fr)_140px_140px_160px_56px] items-center gap-4 border-b border-[var(--border)] px-6 py-4 text-sm transition-colors hover:bg-slate-50/50 last:border-b-0"
                           >
                             <div className="font-mono text-[var(--muted-foreground)]">
                               PM-{String(paiement.id).padStart(4, "0")}
@@ -1556,6 +1591,33 @@ export function AgentWorkspace({
                               <Badge variant={toneForStatus(paiement.statut)} className="whitespace-nowrap truncate">
                                 {paiement.statut}
                               </Badge>
+                            </div>
+                            <div className="flex justify-end">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label="Payment actions"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--muted-foreground)] shadow-sm transition-colors hover:bg-slate-50 hover:text-[var(--foreground)]"
+                                  >
+                                    <Ellipsis className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                  <DropdownMenuItem onClick={() => setPaymentDetails(paiement)}>
+                                    <Eye className="mr-2 h-4 w-4 text-[var(--muted-foreground)]" />
+                                    Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => downloadReceiptPdf(paiement)}>
+                                    <FileDown className="mr-2 h-4 w-4 text-emerald-600" />
+                                    Download PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => void handleDeletePayment(paiement)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         );
@@ -1650,14 +1712,14 @@ export function AgentWorkspace({
 
       {/* Property Wizard Modal */}
       <Dialog open={propertyWizardOpen} onOpenChange={setPropertyWizardOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px] w-[95vw]">
+        <DialogContent showCloseButton={false} className="max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[760px] w-[95vw]">
           <DialogHeader className="flex flex-row items-center justify-between border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
             <div>
               <DialogTitle className="text-xl font-bold">
                 {editingPropertyId ? "Edit Property" : "Create Property"}
               </DialogTitle>
               <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Step {propertyWizardStep + 1} of 4
+                Step {propertyWizardStep + 1} of 3
               </div>
             </div>
             <button
@@ -1675,7 +1737,7 @@ export function AgentWorkspace({
           <div className="h-1 w-full bg-[var(--border)]">
             <div
               className="h-full bg-[var(--primary)] transition-all duration-300 ease-out"
-              style={{ width: `${((propertyWizardStep + 1) / 4) * 100}%` }}
+              style={{ width: `${((propertyWizardStep + 1) / 3) * 100}%` }}
             />
           </div>
 
@@ -1708,70 +1770,56 @@ export function AgentWorkspace({
 
             {propertyWizardStep === 1 ? (
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Add the commune</h2>
-                <p className="mt-2 text-sm text-[var(--muted-foreground)]">Add the commune information and it will be saved.</p>
-                <div className="mt-6 grid gap-5 rounded-2xl border border-[var(--border)] bg-slate-50/50 p-6 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Commune name</Label>
-                    <Input
-                      className="h-11 rounded-xl"
-                      value={communeDraft.nom}
-                      onChange={(event) => {
-                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                        setCommuneDraft((current) => ({ ...current, nom: event.target.value }));
-                      }}
-                      placeholder="Hay Riad, Agdal, Temara..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Population</Label>
-                    <Input
-                      className="h-11 rounded-xl"
-                      type="number"
-                      value={communeDraft.nombre_habitants}
-                      onChange={(event) => {
-                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                        setCommuneDraft((current) => ({ ...current, nombre_habitants: event.target.value }));
-                      }}
-                      placeholder="85000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Distance to agency (km)</Label>
-                    <Input
-                      className="h-11 rounded-xl"
-                      type="number"
-                      value={communeDraft.distance_agence}
-                      onChange={(event) => {
-                        setPropertyForm((current) => ({ ...current, commune_id: "" }));
-                        setCommuneDraft((current) => ({ ...current, distance_agence: event.target.value }));
-                      }}
-                      placeholder="3.5"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {propertyWizardStep === 2 ? (
-              <div>
                 <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Describe the house</h2>
                 <div className="mt-6 grid gap-5 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Address</Label>
-                    <Input className="h-11 rounded-xl" value={propertyForm.adresse} onChange={(event) => setPropertyForm((current) => ({ ...current, adresse: event.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Title</Label>
-                    <Input className="h-11 rounded-xl" value={propertyForm.titre} onChange={(event) => setPropertyForm((current) => ({ ...current, titre: event.target.value }))} placeholder="Modern studio near Agdal" />
+                    <Input className="h-11 rounded-xl" maxLength={90} value={propertyForm.titre} onChange={(event) => setPropertyForm((current) => ({ ...current, titre: event.target.value }))} placeholder="Modern studio near Agdal" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Address</Label>
+                    <Input className="h-11 rounded-xl truncate" maxLength={120} value={propertyForm.adresse} onChange={(event) => setPropertyForm((current) => ({ ...current, adresse: event.target.value }))} title={propertyForm.adresse} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Location</Label>
+                    <LocationPicker
+                      value={{
+                        latitude: propertyForm.latitude !== "" ? Number.parseFloat(propertyForm.latitude) : null,
+                        longitude: propertyForm.longitude !== "" ? Number.parseFloat(propertyForm.longitude) : null,
+                        address: propertyForm.adresse,
+                        city: propertyForm.city,
+                        country: propertyForm.country,
+                      }}
+                      onChange={(location) =>
+                        setPropertyForm((current) => ({
+                          ...current,
+                          adresse: location.address || current.adresse,
+                          commune_id: autoCommuneId(communes, location),
+                          latitude: location.latitude !== null ? String(location.latitude) : "",
+                          longitude: location.longitude !== null ? String(location.longitude) : "",
+                          city: location.city,
+                          country: location.country,
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Publication status</Label>
-                    <select className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10" value={propertyForm.statut_publication} onChange={(event) => setPropertyForm((current) => ({ ...current, statut_publication: event.target.value }))}>
-                      <option value="listed">Listed</option>
-                      <option value="draft">Draft</option>
-                      <option value="maintenance">Maintenance</option>
-                    </select>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Property status</Label>
+                    <Select
+                      value={propertyForm.statut_publication}
+                      onValueChange={(value) => setPropertyForm((current) => ({ ...current, statut_publication: value }))}
+                    >
+                      <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {PROPERTY_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Description</Label>
@@ -1807,16 +1855,24 @@ export function AgentWorkspace({
                   </label>
                   <div className="space-y-4 rounded-xl border border-[var(--border)] bg-slate-50/50 p-5 sm:col-span-2">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Attach tenant to this house</Label>
-                    <select
-                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm shadow-sm outline-none transition-all focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
-                      value={propertyForm.locataire_id}
-                      onChange={(event) => setPropertyForm((current) => ({ ...current, locataire_id: event.target.value }))}
+                    <Select
+                      value={propertyForm.locataire_id || "vacant"}
+                      onValueChange={(value) => setPropertyForm((current) => ({ ...current, locataire_id: value === "vacant" ? "" : value }))}
                     >
-                      <option value="">Keep property vacant</option>
-                      {tenantUsers.map((entry) => (
-                        <option key={entry.id} value={entry.locataire_profile?.id ?? ""}>{entry.name}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-11 w-full rounded-xl bg-white shadow-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="vacant">Keep property vacant</SelectItem>
+                        {tenantUsers
+                          .filter((entry) => entry.locataire_profile?.id)
+                          .map((entry) => (
+                            <SelectItem key={entry.id} value={String(entry.locataire_profile?.id)}>
+                              {entry.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                     {propertyForm.locataire_id ? (
                       <div className="grid gap-4 sm:grid-cols-3 pt-2">
                         <div className="space-y-2">
@@ -1829,10 +1885,18 @@ export function AgentWorkspace({
                         </div>
                         <div className="space-y-2">
                           <Label className="text-[11px] text-[var(--muted-foreground)]">Status</Label>
-                          <select className="h-10 w-full rounded-lg border border-[var(--border)] bg-white px-2 text-sm outline-none focus:border-[var(--primary)]" value={propertyForm.contrat_statut} onChange={(event) => setPropertyForm((current) => ({ ...current, contrat_statut: event.target.value }))}>
-                            <option value="active">Active</option>
-                            <option value="pending">Pending</option>
-                          </select>
+                          <Select
+                            value={propertyForm.contrat_statut}
+                            onValueChange={(value) => setPropertyForm((current) => ({ ...current, contrat_statut: value }))}
+                          >
+                            <SelectTrigger className="h-10 w-full rounded-lg bg-white text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="pending">Pending</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     ) : null}
@@ -1841,7 +1905,7 @@ export function AgentWorkspace({
               </div>
             ) : null}
 
-            {propertyWizardStep === 3 ? (
+            {propertyWizardStep === 2 ? (
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Add photos</h2>
                 <div className="mt-2 flex items-center justify-between">
@@ -1916,16 +1980,15 @@ export function AgentWorkspace({
               <Button variant="outline" className="rounded-xl shadow-sm" disabled={propertyWizardStep === 0 || busy} onClick={() => setPropertyWizardStep((current) => Math.max(0, current - 1))}>
                 Back
               </Button>
-              {propertyWizardStep < 3 ? (
+              {propertyWizardStep < 2 ? (
                 <Button
                   className="rounded-xl shadow-sm px-6"
                   disabled={
                     preparingImages ||
                     (propertyWizardStep === 0 && !propertyForm.type_logement_id) ||
-                    (propertyWizardStep === 1 && !propertyForm.commune_id && !communeDraft.nom.trim()) ||
-                    (propertyWizardStep === 2 && (!propertyForm.adresse || !propertyForm.superficie || !propertyForm.loyer))
+                    (propertyWizardStep === 1 && (!propertyForm.adresse || !propertyForm.superficie || !propertyForm.loyer))
                   }
-                  onClick={() => setPropertyWizardStep((current) => Math.min(3, current + 1))}
+                  onClick={() => setPropertyWizardStep((current) => Math.min(2, current + 1))}
                 >
                   Continue
                 </Button>
@@ -2338,6 +2401,54 @@ export function AgentWorkspace({
               </div>
               <div className="px-6 py-4 text-center text-sm font-medium text-white/80 border-t border-white/10">
                 {propertyImageViewer.index + 1} of {propertyImageViewer.images.length}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(paymentDetails)} onOpenChange={(open) => !open && setPaymentDetails(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-w-[640px]">
+          <DialogHeader className="border-b border-[var(--border)] bg-slate-50/50 px-6 py-5">
+            <DialogTitle className="text-xl font-bold">Payment details</DialogTitle>
+          </DialogHeader>
+          {paymentDetails ? (
+            <div className="space-y-5 px-6 py-6">
+              <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-slate-50/50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Payment ref</div>
+                  <div className="mt-1 font-mono text-lg font-bold">PM-{String(paymentDetails.id).padStart(4, "0")}</div>
+                </div>
+                <Badge variant={toneForStatus(paymentDetails.statut)}>{paymentDetails.statut}</Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  { label: "Tenant", value: paymentDetails.contrat.locataire.user.name },
+                  { label: "Property", value: paymentDetails.contrat.logement.adresse },
+                  { label: "Amount", value: `${formatMoney(paymentDetails.montant)} MAD` },
+                  { label: "Payment Date", value: formatShortDate(paymentDetails.date_paiement) },
+                  { label: "Recorded at", value: formatDateTime(paymentDetails.created_at ?? null) },
+                  { label: "Approved at", value: formatDateTime(paymentDetails.approved_by_tenant_at) },
+                  { label: "Method", value: paymentDetails.mode },
+                  { label: "Reference", value: paymentDetails.reference ?? paymentDetails.rib ?? paymentDetails.cash_note ?? "N/A" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-[var(--border)] bg-white p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{item.label}</div>
+                    <div className="mt-1 break-words text-sm font-semibold text-[var(--foreground)]">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:justify-end">
+                <Button variant="outline" className="rounded-xl bg-white" onClick={() => downloadReceiptPdf(paymentDetails)}>
+                  <FileDown className="h-4 w-4" />
+                  Download PDF
+                </Button>
+                <Button variant="danger" className="rounded-xl" onClick={() => void handleDeletePayment(paymentDetails)}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
               </div>
             </div>
           ) : null}

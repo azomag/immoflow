@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { ChevronDown, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import {
   getDashboardUrl,
   getLoginUrl,
-  getLogoutUrl,
   getSignupUrl,
   type LandingSession,
   type LandingUser,
@@ -51,40 +51,15 @@ function getDisplayUser(session: LandingSession | null): LandingUser | null {
 export function AuthNavActions({ variant, mobile = false, onNavigate }: AuthNavActionsProps) {
   const { t } = useI18n();
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [session, setSession] = useState<LandingSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
 
-  const user = useMemo(() => getDisplayUser(session), [session]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch("/api/auth/session", {
-      cache: "no-store",
-      credentials: "include",
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: LandingSession | null) => {
-        if (!cancelled) {
-          setSession(payload);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSession(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const user = useMemo(
+    () => (signedOut ? null : getDisplayUser(session as LandingSession | null)),
+    [session, signedOut],
+  );
+  const loading = status === "loading";
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -105,6 +80,13 @@ export function AuthNavActions({ variant, mobile = false, onNavigate }: AuthNavA
     variant === "hero"
       ? "btn-glow rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/20"
       : "rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/86";
+
+  const handleLogout = () => {
+    setSignedOut(true);
+    setOpen(false);
+    onNavigate?.();
+    void signOut({ callbackUrl: "/" });
+  };
 
   if (loading && !mobile) {
     return <div className="h-10 w-28 rounded-full bg-white/10" />;
@@ -170,10 +152,10 @@ export function AuthNavActions({ variant, mobile = false, onNavigate }: AuthNavA
               <LayoutDashboard className="h-4 w-4" />
               {t.nav.dashboard}
             </Link>
-            <Link href={getLogoutUrl()} onClick={onNavigate} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
+            <button type="button" onClick={handleLogout} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50">
               <LogOut className="h-4 w-4" />
               {t.nav.logout}
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -218,10 +200,10 @@ export function AuthNavActions({ variant, mobile = false, onNavigate }: AuthNavA
             {t.nav.dashboard}
           </Link>
           <div className="my-1 h-px bg-black/8" />
-          <Link href={getLogoutUrl()} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
+          <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50">
             <LogOut className="h-4 w-4" />
             {t.nav.logout}
-          </Link>
+          </button>
         </div>
       ) : null}
     </div>

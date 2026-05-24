@@ -27,7 +27,7 @@ class RolePermissions
             'locataires.manage',
             'communes.manage',
             'types.manage',
-            'logements.view',
+            'logements.manage',
             'contrats.view',
             'paiements.view',
         ],

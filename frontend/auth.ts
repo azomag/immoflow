@@ -141,4 +141,18 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    async signOut({ token }) {
+      const backendToken = token?.backendToken;
+      if (typeof backendToken !== "string" || !backendToken) {
+        return;
+      }
+
+      await backendRequest<{ message: string }>(
+        "/api/auth/logout",
+        { method: "POST" },
+        backendToken,
+      ).catch(() => undefined);
+    },
+  },
 };

@@ -34,7 +34,7 @@ type TranslationTree = {
     badge: string;
     title: string;
     description: string;
-    cards: Array<{ title: string; description: string; metric: string }>;
+    cards: Array<{ title: string; subtitle: string; description: string }>;
     cta: string;
   };
   listings: {
@@ -83,7 +83,7 @@ type TranslationTree = {
     badge: string;
     title: string;
     description: string;
-    items: Array<{ title: string; description: string }>;
+    items: Array<{ title: string; subtitle: string; description: string }>;
   };
   plans: {
     badge: string;
@@ -96,6 +96,24 @@ type TranslationTree = {
       features: string[];
       featured?: boolean;
       cta: string;
+    }>;
+  };
+  teams: {
+    badge: string;
+    title: string;
+    description: string;
+    members: Array<{
+      id: string;
+      name: string;
+      department: string;
+      specialty: string;
+      image: string;
+      socials: {
+        twitter?: string;
+        linkedin?: string;
+        github?: string;
+        mail?: string;
+      };
     }>;
   };
   contact: {
@@ -114,12 +132,245 @@ type TranslationTree = {
 };
 
 const translations: Record<Locale, TranslationTree> = {
+  fr: {
+    nav: {
+      links: [
+        { label: "Accueil", href: "/" },
+        { label: "Plateforme", href: "#overview" },
+        { label: "Gestion", href: "#workflows" },
+        { label: "Contact", href: "#contact" },
+      ],
+      cta: "Connexion",
+      login: "Connexion",
+      signup: "Inscription",
+      profileSettings: "Paramètres du profil",
+      dashboard: "Tableau de bord",
+      logout: "Déconnexion",
+    },
+    hero: {
+      badge: "Solution de gestion immobilière tout-en-un",
+      title: "Gérez vos biens immobiliers en toute simplicité",
+      description:
+        "Publiez, louez, encaissez en toute sécurité. Offrez une expérience digitale fluide et gagnez des heures chaque semaine avec IMMOFLOW.",
+      primaryCta: "Découvrir plus",
+      secondaryCta: "Voir les plans",
+      scroll: "Découvrir plus",
+    },
+    overview: {
+      badge: "Vue d'ensemble",
+      title: "Gérez vos annonces et votre gestion locative depuis un seul produit.",
+      description:
+        "Immoflow centralise tout : annonces, visites, contrats et échanges. Chaque équipe garde son espace de travail, dans un flux unique et clair.",
+      cards: [
+        {
+          title: "Espace Agent",
+          subtitle: "Plus simple",
+          description:
+            "Un seul écran pour suivre vos prospects, planifier les visites et gérer vos biens.",
+        },
+        {
+          title: "Espace Locataire",
+          subtitle: "Parcours plus clair",
+          description:
+            "Permettez à vos locataires de consulter les logements, envoyer leurs demandes et suivre leurs documents en toute autonomie.",
+        },
+        {
+          title: "Espace Administration",
+          subtitle: "Pilotage centralisé",
+          description:
+            "Supervisez l’occupation, les validations et les indicateurs clés avec une vision globale en temps réel.",
+        },
+      ],
+      cta: "Voir la logique de gestion",
+    },
+    listings: {
+      badge: "Logements publics",
+      title: "Présentez les biens disponibles avec des informations claires et une mise en scène premium.",
+      cta: "Voir tous les logements",
+      items: [
+        {
+          id: "1",
+          image: "/images/property-1.png",
+          title: "Palm View Residence",
+          location: "Casablanca Finance City",
+          price: 850,
+          rating: 4.9,
+          reviews: 124,
+          badge: "2 chambres",
+          featured: true,
+          featuredLabel: "Sélection",
+          priceSuffix: "/ mois",
+          statusLabel: "Disponible",
+        },
+        {
+          id: "2",
+          image: "/images/property-2.png",
+          title: "Résidence Horizon",
+          location: "Rabat Agdal",
+          price: 1200,
+          rating: 4.8,
+          reviews: 86,
+          badge: "Appartement familial",
+          featured: false,
+          featuredLabel: "Sélection",
+          priceSuffix: "/ mois",
+          statusLabel: "Nouvelle annonce",
+        },
+        {
+          id: "3",
+          image: "/images/property-3.png",
+          title: "Marina Loft",
+          location: "Tanger Marina Bay",
+          price: 1500,
+          rating: 4.9,
+          reviews: 210,
+          badge: "Vue mer",
+          featured: true,
+          featuredLabel: "Sélection",
+          priceSuffix: "/ mois",
+          statusLabel: "Prêt à occuper",
+        },
+      ],
+      filters: {
+        destination: "Destination",
+        destinationPlaceholder: "Ville, quartier, adresse",
+        bedrooms: "Chambres",
+        maxBudget: "Budget max",
+        reset: "Réinitialiser",
+        categories: {
+          all: "Tous",
+          apartments: "Appartements",
+          houses: "Maisons",
+          parking: "Parking",
+          premium: "Premium",
+        },
+        availableTitle: "Logements disponibles",
+        listingSingular: "annonce",
+        listingPlural: "annonces",
+        publishedByAgents: "publiées par les agents Immoflow.",
+        viewAll: "Voir tout",
+        noResultsTitle: "Aucun logement trouvé",
+        noResultsDescription: "Changez les filtres pour afficher plus d'annonces.",
+        perMonth: "/ mois",
+        saveListing: "Enregistrer l'annonce",
+      },
+    },
+    workflows: {
+      badge: "Gestion",
+      title: "Organisez la gestion locative par rôle, sans perdre la vue d’ensemble.",
+      description:
+        "Séparez les responsabilités, gardez les données centralisées. Gagnez du temps et réduisez les allers-retours.",
+      items: [
+        {
+          title: "Opérations agent",
+          subtitle: "Vendez plus vite",
+          description:
+            "Suivez vos prospects et visites au même endroit. Moins de temps perdu, plus de baux signés.",
+        },
+        {
+          title: "Cycle locataire",
+          subtitle: "Simplifiez la gestion",
+          description:
+            "Centralisez demandes, documents et relances. Tout est clair, rien ne se perd.",
+        },
+        {
+          title: "Pilotage administratif",
+          subtitle: "Supervision opérationnelle",
+          description:
+            "Mesurez la performance des équipes, l’occupation et la qualité de service en temps réel.",
+        },
+      ],
+    },
+    plans: {
+      badge: "Plans",
+      title: "Choisissez le déploiement adapté à votre organisation.",
+      description:
+        "Commencez avec une configuration légère ou activez une couche complète de gouvernance.",
+      cards: [
+        {
+          name: "Starter",
+          price: "49€",
+          audience: "Pour les petites agences qui lancent leur catalogue.",
+          features: ["Site web d'annonces", "Demandes locataires", "Jusqu'à 50 biens"],
+          cta: "Commencer",
+        },
+        {
+          name: "Pro",
+          price: "129€",
+          audience: "Pour gérer les visites, locataires et suivi interne.",
+          features: ["Espace agent et pipeline", "Suivi locataire", "Tableaux de bord"],
+          featured: true,
+          cta: "Choisir Pro",
+        },
+        {
+          name: "Enterprise",
+          price: "Sur mesure",
+          audience: "Pour les organisations avec besoins de gouvernance.",
+          features: ["Administration par rôles", "Reporting", "Support prioritaire"],
+          cta: "Nous contacter",
+        },
+      ],
+    },
+    teams: {
+      badge: "Le Cœur de l'Ingénierie",
+      title: "Rencontrez les esprits derrière l'architecture.",
+      description: "Un collectif de designers, d'ingénieurs et de stratèges dédiés à l'élévation de vos espaces de travail.",
+      members: [
+        {
+          id: "1",
+          name: "Mohamed Azoumag",
+          department: "Génie Informatique",
+          specialty: "Full Stack Developer",
+          image: "/teams/mohamed.png",
+          socials: { twitter: "#", linkedin: "#", github: "#" },
+        },
+        {
+          id: "2",
+          name: "Hajar Kandri",
+          department: "Génie Informatique",
+          specialty: "Administratrice Réseau",
+          image: "/teams/hajar.png",
+          socials: { twitter: "#", linkedin: "#", mail: "mailto:#" },
+        },
+        {
+          id: "3",
+          name: "Hind Khodari",
+          department: "Génie Informatique",
+          specialty: "Cybersecurity Specialist",
+          image: "/teams/hind.png",
+          socials: { linkedin: "#", github: "#" },
+        },
+      ],
+    },
+    contact: {
+      badge: "Contact",
+      title: "Lancez Immoflow avec la bonne organisation",
+      description:
+        "Discutez de vos besoins avec notre équipe : site public, gestion interne, multi-langue et reporting.",
+      cards: [
+        { label: "Email", value: "contact@immoflow.com" },
+        { label: "Téléphone", value: "+212 695446640" },
+        { label: "Bureau", value: "Sala EL Jadida, Maroc" },
+      ],
+      cta: "Demander une démo",
+    },
+    footer: {
+      tagline:
+        "Immoflow centralise la gestion locative : publication des biens, organisation des visites et suivi des locataires sur une seule plateforme.",
+      columns: [
+        { title: "Navigation", links: ["Accueil", "Plateforme", "Gestion", "Contact"] },
+        { title: "Produit", links: ["Espace Agent", "Espace Locataire", "Administration"] },
+      ],
+      legal: ["Confidentialité", "Conditions", "Cookies"],
+      rights: "© 2026 Immoflow. Tous droits réservés.",
+    },
+  },
   en: {
     nav: {
       links: [
         { label: "Home", href: "/" },
         { label: "Platform", href: "#overview" },
-        { label: "Workflows", href: "#workflows" },
+        { label: "Management", href: "#workflows" },
         { label: "Contact", href: "#contact" },
       ],
       cta: "Login",
@@ -130,37 +381,34 @@ const translations: Record<Locale, TranslationTree> = {
       logout: "Logout",
     },
     hero: {
-      badge: "Rental operations platform",
-      title: "Integrated Real Estate Management System",
+      badge: "All-in-one property management solution",
+      title: "Manage your real estate properties with ease",
       description:
-        "A professional real-estate workflow for public listings, tenant follow-up, operational management, and decision-ready reporting.",
-      primaryCta: "Browse listings",
+        "Publish, rent, and collect securely. Offer a seamless digital experience and save hours every week with IMMOFLOW.",
+      primaryCta: "Discover more",
       secondaryCta: "View plans",
-      scroll: "Scroll",
+      scroll: "Discover more",
     },
     overview: {
       badge: "Platform overview",
-      title: "One product for the public website and the internal rental workflow.",
+      title: "Manage your listings and rental operations from a single product.",
       description:
-        "Immoflow gives every team the workspace it needs while keeping listings, contracts, visits, documents, and communication aligned in one operating model.",
+        "Immoflow centralizes everything: listings, visits, contracts, and communication. Each team keeps their workspace in a single, clear flow.",
       cards: [
         {
-          title: "Agent workspace",
-          description:
-            "Manage visits, leads, owner follow-up, property updates, and pipeline activity from a single dashboard.",
-          metric: "Faster lead handling",
+          title: "Agent Workspace",
+          subtitle: "Simpler",
+          description: "A single screen to track your leads, schedule visits, and manage properties.",
         },
         {
-          title: "Tenant portal",
-          description:
-            "Let tenants review listings, submit requests, track documents, and stay informed through a cleaner rental journey.",
-          metric: "Clearer tenant journey",
+          title: "Tenant Workspace",
+          subtitle: "Clearer journey",
+          description: "Allow tenants to view properties, send requests, and track documents independently.",
         },
         {
-          title: "Administration hub",
-          description:
-            "Supervise occupancy, approvals, reporting, and operational compliance with a complete view of the business.",
-          metric: "Centralized control",
+          title: "Administration Workspace",
+          subtitle: "Centralized control",
+          description: "Supervise occupancy, approvals, and key metrics with a global real-time view.",
         },
       ],
       cta: "See how management flows work",
@@ -239,24 +487,24 @@ const translations: Record<Locale, TranslationTree> = {
     },
     workflows: {
       badge: "Management",
-      title: "Operational spaces designed around the real roles in a rental business.",
+      title: "Organize rental management by role, without losing the big picture.",
       description:
-        "The platform separates responsibilities without fragmenting the data, so each actor works faster with fewer handoffs.",
+        "Separate responsibilities, keep data centralized. Save time and reduce back-and-forths.",
       items: [
         {
           title: "Agent operations",
-          description:
-            "Track prospects, organize visits, update listing quality, and convert demand into signed occupancy.",
+          subtitle: "Sell faster",
+          description: "Track leads and visits in one place. Less time wasted, more leases signed.",
         },
         {
-          title: "Tenant lifecycle",
-          description:
-            "Handle applications, files, follow-up, and key status updates in a structured communication flow.",
+          title: "Tenant cycle",
+          subtitle: "Simplify management",
+          description: "Centralize requests, documents, and reminders. Everything is clear, nothing is lost.",
         },
         {
-          title: "Administrative governance",
-          description:
-            "Monitor occupancy, financial performance, workload, and service quality from one reporting layer.",
+          title: "Administrative steering",
+          subtitle: "Operational supervision",
+          description: "Measure team performance, occupancy, and service quality in real time.",
         },
       ],
     },
@@ -270,22 +518,14 @@ const translations: Record<Locale, TranslationTree> = {
           name: "Starter",
           price: "€49",
           audience: "For small agencies launching their public catalog.",
-          features: [
-            "Public listings website",
-            "Basic tenant requests",
-            "Up to 50 active properties",
-          ],
+          features: ["Public listings website", "Basic tenant requests", "Up to 50 active properties"],
           cta: "Start with Starter",
         },
         {
           name: "Pro",
           price: "€129",
           audience: "For active teams managing visits, tenants, and internal follow-up.",
-          features: [
-            "Agent workspace and pipelines",
-            "Tenant follow-up and document tracking",
-            "Operational dashboards",
-          ],
+          features: ["Agent workspace and pipelines", "Tenant follow-up and document tracking", "Operational dashboards"],
           featured: true,
           cta: "Choose Pro",
         },
@@ -293,20 +533,47 @@ const translations: Record<Locale, TranslationTree> = {
           name: "Enterprise",
           price: "Custom",
           audience: "For administrations and multi-branch organizations needing governance and reporting.",
-          features: [
-            "Role-based administration",
-            "Custom reporting structure",
-            "Priority onboarding and support",
-          ],
+          features: ["Role-based administration", "Custom reporting structure", "Priority onboarding and support"],
           cta: "Talk to sales",
+        },
+      ],
+    },
+    teams: {
+      badge: "The Engineering Core",
+      title: "Meet the minds behind the architecture.",
+      description: "A collective of designers, engineers, and strategists dedicated to elevating your digital and physical workspaces.",
+      members: [
+        {
+          id: "1",
+          name: "Mohamed Azoumag",
+          department: "Computer Engineering",
+          specialty: "Full Stack Developer",
+          image: "/teams/mohamed.png",
+          socials: { twitter: "#", linkedin: "#", github: "#" },
+        },
+        {
+          id: "2",
+          name: "Hajar Kandri",
+          department: "Computer Engineering",
+          specialty: "Network Administrator",
+          image: "/teams/hajar.png",
+          socials: { twitter: "#", linkedin: "#", mail: "mailto:#" },
+        },
+        {
+          id: "3",
+          name: "Hind Khodari",
+          department: "Computer Engineering",
+          specialty: "Cybersecurity Specialist",
+          image: "/teams/hind.png",
+          socials: { linkedin: "#", github: "#" },
         },
       ],
     },
     contact: {
       badge: "Contact",
-      title: "Plan your Immoflow rollout with the right operational setup.",
+      title: "Launch Immoflow with the right setup",
       description:
-        "Discuss public listings, internal management, multilingual deployment, and reporting needs with our team.",
+        "Discuss your needs with our team: public site, internal management, multi-language, and reporting.",
       cards: [
         { label: "Email", value: "contact@immoflow.com" },
         { label: "Phone", value: "+212 695446640" },
@@ -316,224 +583,13 @@ const translations: Record<Locale, TranslationTree> = {
     },
     footer: {
       tagline:
-        "Immoflow helps rental teams publish listings, coordinate operations, and keep tenants informed from one platform.",
+        "Immoflow centralizes rental management: publishing properties, organizing visits, and following up with tenants on a single platform.",
       columns: [
-        { title: "Navigation", links: ["Home", "Platform", "Workflows", "Contact"] },
-        { title: "Product", links: ["Agent workspace", "Tenant portal", "Administration"] },
+        { title: "Navigation", links: ["Home", "Platform", "Management", "Contact"] },
+        { title: "Product", links: ["Agent Workspace", "Tenant Workspace", "Administration"] },
       ],
-      legal: ["Privacy policy", "Terms of service", "Cookies"],
-      rights: "All rights reserved.",
-    },
-  },
-  fr: {
-    nav: {
-      links: [
-        { label: "Accueil", href: "/" },
-        { label: "Plateforme", href: "#overview" },
-        { label: "Gestion", href: "#workflows" },
-        { label: "Contact", href: "#contact" },
-      ],
-      cta: "Connexion",
-      login: "Connexion",
-      signup: "Inscription",
-      profileSettings: "Parametres du profil",
-      dashboard: "Tableau de bord",
-      logout: "Deconnexion",
-    },
-    hero: {
-      badge: "Plateforme de gestion locative",
-      title: "Système intégré de gestion immobilière",
-      description:
-        "Une experience professionnelle pour publier des logements, suivre la relation locataire, piloter la gestion et analyser la performance depuis une seule plateforme.",
-      primaryCta: "Voir les logements",
-      secondaryCta: "Voir les plans",
-      scroll: "Defiler",
-    },
-    overview: {
-      badge: "Vue d'ensemble",
-      title: "Un seul produit pour le site public et pour toute l'organisation locative.",
-      description:
-        "Immoflow donne a chaque equipe son espace de travail tout en gardant les annonces, les visites, les contrats, les documents et les echanges dans un flux unique.",
-      cards: [
-        {
-          title: "Espace agent",
-          description:
-            "Suivez les prospects, organisez les visites, mettez a jour les biens et pilotez l'activite commerciale depuis un seul tableau.",
-          metric: "Traitement plus rapide",
-        },
-        {
-          title: "Espace locataire",
-          description:
-            "Permettez au locataire de consulter les logements, envoyer ses demandes, suivre ses documents et rester informe a chaque etape.",
-          metric: "Parcours plus clair",
-        },
-        {
-          title: "Espace administration",
-          description:
-            "Supervisez l'occupation, les validations, les indicateurs et la conformite avec une vision globale de l'activite.",
-          metric: "Pilotage centralise",
-        },
-      ],
-      cta: "Voir la logique de gestion",
-    },
-    listings: {
-      badge: "Logements publics",
-      title: "Presentez les biens disponibles avec des informations claires et une mise en scene premium.",
-      cta: "Voir tous les logements",
-      items: [
-        {
-          id: "1",
-          image: "/images/property-1.png",
-          title: "Palm View Residence",
-          location: "Casablanca Finance City",
-          price: 850,
-          rating: 4.9,
-          reviews: 124,
-          badge: "2 chambres",
-          featured: true,
-          featuredLabel: "Selection",
-          priceSuffix: "/ mois",
-          statusLabel: "Disponible",
-        },
-        {
-          id: "2",
-          image: "/images/property-2.png",
-          title: "Residence Horizon",
-          location: "Rabat Agdal",
-          price: 1200,
-          rating: 4.8,
-          reviews: 86,
-          badge: "Appartement familial",
-          featured: false,
-          featuredLabel: "Selection",
-          priceSuffix: "/ mois",
-          statusLabel: "Nouvelle annonce",
-        },
-        {
-          id: "3",
-          image: "/images/property-3.png",
-          title: "Marina Loft",
-          location: "Tanger Marina Bay",
-          price: 1500,
-          rating: 4.9,
-          reviews: 210,
-          badge: "Vue mer",
-          featured: true,
-          featuredLabel: "Selection",
-          priceSuffix: "/ mois",
-          statusLabel: "Pret a occuper",
-        },
-      ],
-      filters: {
-        destination: "Destination",
-        destinationPlaceholder: "Ville, quartier, adresse",
-        bedrooms: "Chambres",
-        maxBudget: "Budget max",
-        reset: "Reset",
-        categories: {
-          all: "Tous",
-          apartments: "Appartements",
-          houses: "Maisons",
-          parking: "Parking",
-          premium: "Premium",
-        },
-        availableTitle: "Logements disponibles",
-        listingSingular: "annonce",
-        listingPlural: "annonces",
-        publishedByAgents: "publiees par les agents Immoflow.",
-        viewAll: "Voir tout",
-        noResultsTitle: "Aucun logement trouve",
-        noResultsDescription: "Change les filtres pour afficher plus d'annonces.",
-        perMonth: "/ mois",
-        saveListing: "Enregistrer l'annonce",
-      },
-    },
-    workflows: {
-      badge: "Gestion",
-      title: "Des espaces operationnels concus autour des vrais roles du metier locatif.",
-      description:
-        "La plateforme separe les responsabilites sans fragmenter les donnees, pour que chaque acteur gagne du temps avec moins d'allers-retours.",
-      items: [
-        {
-          title: "Operations agent",
-          description:
-            "Centralisez les prospects, les visites, la qualite des annonces et la transformation en occupation signee.",
-        },
-        {
-          title: "Cycle locataire",
-          description:
-            "Structurez les demandes, les dossiers, les relances et les mises a jour importantes dans un flux lisible.",
-        },
-        {
-          title: "Pilotage administratif",
-          description:
-            "Suivez l'occupation, la performance, la charge des equipes et la qualite de service depuis un seul niveau de reporting.",
-        },
-      ],
-    },
-    plans: {
-      badge: "Plans",
-      title: "Choisissez le deploiement adapte a votre portefeuille et a votre organisation.",
-      description:
-        "Commencez avec une configuration legere ou activez une couche complete de gouvernance pour des equipes multiples.",
-      cards: [
-        {
-          name: "Starter",
-          price: "49€",
-          audience: "Pour les petites agences qui lancent leur catalogue public.",
-          features: [
-            "Site web d'annonces",
-            "Demandes locataires de base",
-            "Jusqu'a 50 biens actifs",
-          ],
-          cta: "Commencer avec Starter",
-        },
-        {
-          name: "Pro",
-          price: "129€",
-          audience: "Pour les equipes qui gerent visites, locataires et suivi interne.",
-          features: [
-            "Espace agent et pipeline",
-            "Suivi locataire et documents",
-            "Tableaux de bord operationnels",
-          ],
-          featured: true,
-          cta: "Choisir Pro",
-        },
-        {
-          name: "Enterprise",
-          price: "Sur mesure",
-          audience: "Pour les administrations et organisations multi-sites avec besoins de gouvernance.",
-          features: [
-            "Administration par roles",
-            "Reporting personnalise",
-            "Onboarding et support prioritaires",
-          ],
-          cta: "Contacter l'equipe",
-        },
-      ],
-    },
-    contact: {
-      badge: "Contact",
-      title: "Preparez votre deploiement Immoflow avec une organisation adaptee.",
-      description:
-        "Parlez de votre site public, de votre gestion interne, du multilingue et de vos besoins de reporting avec notre equipe.",
-      cards: [
-        { label: "Email", value: "contact@immoflow.com" },
-        { label: "Telephone", value: "+212 695446640" },
-        { label: "Bureau", value: "Sala EL Jadida" },
-      ],
-      cta: "Demander une demo",
-    },
-    footer: {
-      tagline:
-        "Immoflow aide les equipes locatives a publier les biens, coordonner la gestion et informer les locataires depuis une seule plateforme.",
-      columns: [
-        { title: "Navigation", links: ["Accueil", "Plateforme", "Gestion", "Contact"] },
-        { title: "Produit", links: ["Espace agent", "Espace locataire", "Administration"] },
-      ],
-      legal: ["Confidentialite", "Conditions", "Cookies"],
-      rights: "Tous droits reserves.",
+      legal: ["Privacy", "Terms", "Cookies"],
+      rights: "© 2026 Immoflow. All rights reserved.",
     },
   },
   ar: {
@@ -552,37 +608,34 @@ const translations: Record<Locale, TranslationTree> = {
       logout: "تسجيل الخروج",
     },
     hero: {
-      badge: "منصة لتدبير الكراء",
-      title: "نظام متكامل للتسيير العقاري",
+      badge: "حل متكامل لإدارة العقارات",
+      title: "قم بإدارة عقاراتك بكل سهولة",
       description:
-        "تجربة احترافية لنشر السكنات ومتابعة المكتريين وتسيير العمليات وتحليل الاداء من خلال واجهة واحدة واضحة.",
-      primaryCta: "تصفح السكنات",
+        "انشر، أجر، وحصّل بأمان. قدم تجربة رقمية سلسة ووفر ساعات كل أسبوع مع IMMOFLOW.",
+      primaryCta: "اكتشف المزيد",
       secondaryCta: "شاهد الخطط",
-      scroll: "مرر",
+      scroll: "اكتشف المزيد",
     },
     overview: {
       badge: "نظرة عامة",
-      title: "منتج واحد للموقع العمومي وللتدبير الداخلي الكامل.",
+      title: "قم بإدارة إعلاناتك وعمليات الكراء من منتج واحد.",
       description:
-        "Immoflow تمنح لكل فريق مساحة العمل التي يحتاجها مع الحفاظ على الاعلانات والزيارات والعقود والوثائق والتواصل داخل نفس المسار.",
+        "إيموفلو يركز كل شيء: الإعلانات، الزيارات، العقود والتواصل. يحتفظ كل فريق بمساحة عمله ضمن مسار واحد وواضح.",
       cards: [
         {
           title: "فضاء الوكيل",
-          description:
-            "تتبع العملاء المحتملين وتنظيم الزيارات وتحديث السكنات ومراقبة النشاط التجاري من لوحة واحدة.",
-          metric: "معالجة اسرع",
+          subtitle: "أكثر بساطة",
+          description: "شاشة واحدة لتتبع عملائك، جدولة الزيارات وإدارة عقاراتك.",
         },
         {
           title: "فضاء المكتري",
-          description:
-            "تمكين المكتري من مشاهدة السكنات وارسال الطلبات وتتبع الوثائق والبقاء على اطلاع في كل مرحلة.",
-          metric: "رحلة اوضح",
+          subtitle: "مسار أوضح",
+          description: "اسمح لمكتريك بالاطلاع على السكنات، إرسال طلباتهم وتتبع وثائقهم بكل استقلالية.",
         },
         {
-          title: "فضاء الادارة",
-          description:
-            "مراقبة الاشغال والموافقات والمؤشرات والامتثال عبر رؤية شاملة للنشاط.",
-          metric: "تحكم مركزي",
+          title: "فضاء الإدارة",
+          subtitle: "تحكم مركزي",
+          description: "أشرف على الإشغال والموافقات والمؤشرات الرئيسية برؤية شاملة في الوقت الفعلي.",
         },
       ],
       cta: "اكتشف منطق التسيير",
@@ -661,24 +714,24 @@ const translations: Record<Locale, TranslationTree> = {
     },
     workflows: {
       badge: "التسيير",
-      title: "مساحات تشغيل مصممة حسب الادوار الحقيقية في النشاط الكرائي.",
+      title: "نظم الإدارة الإيجارية حسب الدور، دون أن تفقد الصورة العامة.",
       description:
-        "المنصة تفصل المسؤوليات بدون تشتيت المعطيات حتى يشتغل كل طرف بسرعة اكبر وباقل تنقل بين الادوات.",
+        "افصل بين المسؤوليات، واحتفظ بالبيانات مركزية. وفر الوقت وقلل من التردد ذهاباً وإياباً.",
       items: [
         {
           title: "عمليات الوكيل",
-          description:
-            "مركز واحد لتدبير العملاء والزيارات وجودة الاعلانات وتحويل الطلب الى سكن فعلي.",
+          subtitle: "بِع بشكل أسرع",
+          description: "تتبع العملاء المحتملين والزيارات في مكان واحد. وقت ضائع أقل، عقود أكثر موقعة.",
         },
         {
-          title: "مسار المكتري",
-          description:
-            "تنظيم الطلبات والملفات والتذكيرات والتحديثات المهمة في مسار واضح وسهل المتابعة.",
+          title: "دورة المكتري",
+          subtitle: "بسط الإدارة",
+          description: "ركز الطلبات والوثائق والتذكيرات. كل شيء واضح، لا شيء يضيع.",
         },
         {
-          title: "الاشراف الاداري",
-          description:
-            "متابعة الاشغال والاداء وعبء الفرق وجودة الخدمة من خلال طبقة تقارير موحدة.",
+          title: "القيادة الإدارية",
+          subtitle: "إشراف تشغيلي",
+          description: "قس أداء الفرق والإشغال وجودة الخدمة في الوقت الفعلي.",
         },
       ],
     },
@@ -692,22 +745,14 @@ const translations: Record<Locale, TranslationTree> = {
           name: "Starter",
           price: "49€",
           audience: "لوكالات صغيرة تريد اطلاق الموقع العمومي بسرعة.",
-          features: [
-            "موقع للعروض العقارية",
-            "طلبات مكتريين اساسية",
-            "حتى 50 عقارا نشطا",
-          ],
+          features: ["موقع للعروض العقارية", "طلبات مكتريين اساسية", "حتى 50 عقارا نشطا"],
           cta: "ابدأ مع Starter",
         },
         {
           name: "Pro",
           price: "129€",
           audience: "للفرق التي تدير الزيارات والمكتريين والمتابعة الداخلية يوميا.",
-          features: [
-            "فضاء الوكلاء ومسار المتابعة",
-            "متابعة المكتريين والوثائق",
-            "لوحات قيادة تشغيلية",
-          ],
+          features: ["فضاء الوكلاء ومسار المتابعة", "متابعة المكتريين والوثائق", "لوحات قيادة تشغيلية"],
           featured: true,
           cta: "اختر Pro",
         },
@@ -715,36 +760,63 @@ const translations: Record<Locale, TranslationTree> = {
           name: "Enterprise",
           price: "حسب الطلب",
           audience: "للا دارات والمؤسسات متعددة الفروع التي تحتاج الى حكامة وتقارير متقدمة.",
-          features: [
-            "ادارة حسب الصلاحيات",
-            "تقارير مخصصة",
-            "مواكبة ودعم اولوية",
-          ],
+          features: ["ادارة حسب الصلاحيات", "تقارير مخصصة", "مواكبة ودعم اولوية"],
           cta: "تحدث معنا",
+        },
+      ],
+    },
+    teams: {
+      badge: "الجوهر الهندسي",
+      title: "تعرف على العقول التي تقف وراء الهندسة.",
+      description: "مجموعة من المصممين والمهندسين والاستراتيجيين المكرسين للارتقاء بمساحات عملك.",
+      members: [
+        {
+          id: "1",
+          name: "Mohamed Azoumag",
+          department: "هندسة المعلوميات",
+          specialty: "مطور مواقع شامل",
+          image: "/teams/mohamed.png",
+          socials: { twitter: "#", linkedin: "#", github: "#" },
+        },
+        {
+          id: "2",
+          name: "Hajar Kandri",
+          department: "هندسة المعلوميات",
+          specialty: "مسؤولة شبكات",
+          image: "/teams/hajar.png",
+          socials: { twitter: "#", linkedin: "#", mail: "mailto:#" },
+        },
+        {
+          id: "3",
+          name: "Hind Khodari",
+          department: "هندسة المعلوميات",
+          specialty: "خبيرة أمن سيبراني",
+          image: "/teams/hind.png",
+          socials: { linkedin: "#", github: "#" },
         },
       ],
     },
     contact: {
       badge: "اتصل بنا",
-      title: "ابن انطلاقة Immoflow المناسبة لطريقة عملك.",
+      title: "أطلق إيموفلو بالتنظيم الصحيح",
       description:
-        "ناقش معنا الموقع العمومي والتدبير الداخلي وتعدد اللغات واحتياجات التقارير قبل الاطلاق.",
+        "ناقش احتياجاتك مع فريقنا: الموقع العام، الإدارة الداخلية، تعدد اللغات وإعداد التقارير.",
       cards: [
         { label: "البريد", value: "contact@immoflow.com" },
         { label: "الهاتف", value: "+212 695446640" },
-        { label: "المكتب", value: "سلا الجديدة" },
+        { label: "المكتب", value: "سلا الجديدة، المغرب" },
       ],
-      cta: "اطلب عرضا تجريبيا",
+      cta: "اطلب عرضاً تجريبياً",
     },
     footer: {
       tagline:
-        "Immoflow تساعد فرق الكراء على نشر السكنات وتنسيق العمليات وابقاء المكتريين على اطلاع من منصة واحدة.",
+        "إيموفلو يركز الإدارة الإيجارية: نشر العقارات، تنظيم الزيارات ومتابعة المكتريين على منصة واحدة.",
       columns: [
-        { title: "التنقل", links: ["الرئيسية", "المنصة", "التسيير", "اتصل بنا"] },
-        { title: "المنتج", links: ["فضاء الوكيل", "فضاء المكتري", "الادارة"] },
+        { title: "التنقل", links: ["الرئيسية", "المنصة", "الإدارة", "اتصل بنا"] },
+        { title: "المنتج", links: ["فضاء الوكيل", "فضاء المكتري", "الإدارة"] },
       ],
-      legal: ["الخصوصية", "الشروط", "الكوكيز"],
-      rights: "جميع الحقوق محفوظة.",
+      legal: ["الخصوصية", "الشروط", "ملفات تعريف الارتباط"],
+      rights: "© 2026 إيموفلو. جميع الحقوق محفوظة.",
     },
   },
 };

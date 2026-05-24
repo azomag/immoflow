@@ -2,6 +2,8 @@
 
 import { Mail, ArrowUpRight, Sparkles } from "lucide-react";
 import Image from "next/image";
+// Adjust this import path depending on where your I18nProvider is stored
+import { useI18n } from "@/lib/i18n"; 
 
 // --- Drop-in replacements for the removed Lucide brand icons ---
 const Github = (props: React.SVGProps<SVGSVGElement>) => (
@@ -26,76 +28,40 @@ const Twitter = (props: React.SVGProps<SVGSVGElement>) => (
 );
 // ---------------------------------------------------------------
 
-// Split the roles into 'department' and 'specialty' for the dual-pill design
-const team = [
-  {
-    id: 1,
-    name: "Mohamed Azoumag",
-    department: "Genie Informatique",
-    specialty: "Full Stack Developer",
-    image: "/teams/mohamed.png",
-    socials: {
-      twitter: "#",
-      linkedin: "#",
-      github: "#",
-    },
-  },
-  {
-    id: 2,
-    name: "Hajar Kandri",
-    department: "Genie Informatique",
-    specialty: "Administratrice Réseau",
-    image: "/teams/hajar.png",
-    socials: {
-      twitter: "#",
-      linkedin: "#",
-      mail: "mailto:#",
-    },
-  },
-  {
-    id: 3,
-    name: "Hind Khodari",
-    department: "Genie Informatique",
-    specialty: "Cybersecurity Specialist",
-    image: "/teams/hind.png",
-    socials: {
-      linkedin: "#",
-      github: "#",
-    },
-  },
-];
-
 export default function TeamSection() {
+  const { t } = useI18n();
+
   return (
     <section className="relative w-full bg-[#FAFAFA] py-24 md:py-32 overflow-hidden selection:bg-black selection:text-white">
       {/* Abstract Background Mesh */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[600px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-200/60 via-transparent to-transparent opacity-60 blur-3xl pointer-events-none" />
 
-      {/* Expanded Container Width to handle the larger cards */}
-      <div className="relative z-10 mx-auto max-w-[1400px] px-6 md:px-12 lg:px-16">
+      {/* Expanded Container Width to handle the MASSIVE Lens cards (max-w-[1600px]) */}
+      <div className="relative z-10 mx-auto max-w-[1600px] px-6 md:px-12 lg:px-16">
         
         {/* Header Section */}
-        <div className="flex flex-col items-center text-center mb-20 md:mb-28 animate-in fade-in slide-in-from-bottom-6 duration-700">
-          <div className="mb-6 flex items-center gap-2 rounded-full border border-neutral-200 bg-white/80 backdrop-blur-md px-5 py-2 shadow-sm">
+        <div className="flex flex-col items-center text-center mb-24 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <div className="mb-6 flex items-center gap-2 rounded-full border border-neutral-200 bg-white/80 backdrop-blur-md px-6 py-2.5 shadow-sm">
             <Sparkles className="h-4 w-4 text-black" />
             <span className="text-[12px] font-bold uppercase tracking-widest text-neutral-800">
-              The Visionaries
+              {t.teams.badge}
             </span>
           </div>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-neutral-900 mb-6 drop-shadow-sm leading-[1.1] max-w-3xl">
-            Meet the minds behind the architecture.
+          <h2 className="text-4xl md:text-5xl lg:text-[4rem] font-extrabold tracking-tight text-neutral-900 mb-6 drop-shadow-sm leading-[1.1] max-w-4xl">
+            {t.teams.title}
           </h2>
-          <p className="text-lg text-neutral-500 font-medium max-w-2xl leading-relaxed">
-            A collective of designers, engineers, and strategists dedicated to elevating your digital and physical workspaces.
+          <p className="text-lg md:text-xl text-neutral-500 font-medium max-w-2xl leading-relaxed">
+            {t.teams.description}
           </p>
         </div>
 
-        {/* Huge Cinematic Team Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
-          {team.map((member, index) => (
+        {/* Huge Cinematic Team Grid - Gap adjusted for the pill shapes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
+          {t.teams.members.map((member, index) => (
             <div
               key={member.id}
-              className="group relative h-[550px] lg:h-[680px] w-full rounded-[2.5rem] overflow-hidden bg-neutral-900 shadow-2xl transition-all duration-700 hover:-translate-y-3 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] cursor-pointer animate-in fade-in slide-in-from-bottom-12 fill-mode-both"
+              // The Magic here: rounded-full forces a perfect pill/oval shape on tall cards
+              className="group relative h-[600px] lg:h-[750px] w-full rounded-[40px] overflow-hidden bg-neutral-900 shadow-[0_20px_50px_rgba(0,0,0,0.1)] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] hover:-translate-y-4 hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] cursor-pointer animate-in fade-in slide-in-from-bottom-12 fill-mode-both border-8 border-white/50"
               style={{ animationDelay: `${index * 150}ms` }}
             >
               {/* Full-Bleed Background Image */}
@@ -103,57 +69,52 @@ export default function TeamSection() {
                 src={member.image} 
                 alt={member.name} 
                 fill 
-                className="object-cover object-top transition-all duration-1000 ease-out group-hover:scale-110 grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0" 
+                className="object-cover object-top transition-transform duration-[1.5s] ease-out group-hover:scale-110 grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0" 
               />
               
-              {/* Multi-layered Cinematic Overlays */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-700" />
+              {/* Radial Vignette to emphasize the circle/lens effect */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_40%,_black_120%)] opacity-50 group-hover:opacity-20 transition-opacity duration-700" />
+              
+              {/* Bottom Gradient for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 transition-opacity duration-700" />
 
-              {/* Top-Right Floating Social Links */}
-              <div className="absolute top-6 right-6 flex flex-col gap-3 z-30">
+              {/* Floating Social Links - Positioned uniquely for the curved edges */}
+              <div className="absolute top-16 right-0 left-0 mx-auto flex justify-center gap-4 z-30 opacity-0 -translate-y-8 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-700 ease-out">
                 {member.socials.twitter && (
                   <SocialButton icon={Twitter} href={member.socials.twitter} delay="delay-[0ms]" />
                 )}
                 {member.socials.linkedin && (
-                  <SocialButton icon={Linkedin} href={member.socials.linkedin} delay="delay-[75ms]" />
+                  <SocialButton icon={Linkedin} href={member.socials.linkedin} delay="delay-[100ms]" />
                 )}
                 {member.socials.github && (
-                  <SocialButton icon={Github} href={member.socials.github} delay="delay-[150ms]" />
+                  <SocialButton icon={Github} href={member.socials.github} delay="delay-[200ms]" />
                 )}
                 {member.socials.mail && (
-                  <SocialButton icon={Mail} href={member.socials.mail} delay="delay-[225ms]" />
+                  <SocialButton icon={Mail} href={member.socials.mail} delay="delay-[300ms]" />
                 )}
               </div>
 
-              {/* Bottom Pinned Content Area */}
-              <div className="absolute bottom-0 left-0 w-full p-8 md:p-10 z-20 flex flex-col justify-end transform transition-transform duration-700 ease-out group-hover:-translate-y-4">
+              {/* Centered Pinned Content Area for the Pill shape */}
+              <div className="absolute bottom-12 md:bottom-20 left-0 w-full px-10 z-20 flex flex-col items-center text-center transform transition-transform duration-700 ease-out group-hover:-translate-y-4">
                 
                 {/* Floating Glass Badges - Slide in on hover */}
-                <div className="flex flex-wrap gap-2 mb-5 opacity-0 translate-y-4 transition-all duration-500 ease-out group-hover:opacity-100 group-hover:translate-y-0 delay-100">
-                  <span className="px-3.5 py-1.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg">
+                <div className="flex flex-wrap justify-center gap-2 mb-6 opacity-0 translate-y-4 transition-all duration-500 ease-out group-hover:opacity-100 group-hover:translate-y-0 delay-150">
+                  <span className="px-4 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-[11px] font-bold uppercase tracking-[0.15em] text-white shadow-lg">
                     {member.department}
                   </span>
-                  <span className="px-3.5 py-1.5 rounded-full bg-white text-[11px] font-bold uppercase tracking-wider text-black shadow-lg">
+                  <span className="px-4 py-2 rounded-full bg-white text-[11px] font-bold uppercase tracking-[0.15em] text-black shadow-lg">
                     {member.specialty}
                   </span>
                 </div>
 
-                <div className="flex items-end justify-between w-full">
-                  <div>
-                    <h3 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-md">
-                      {member.name}
-                    </h3>
-                  </div>
+                <h3 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight drop-shadow-md mb-6">
+                  {member.name}
+                </h3>
 
-                  {/* Circular Arrow Button - Fades in on hover */}
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white opacity-0 translate-x-4 transition-all duration-500 group-hover:opacity-100 group-hover:translate-x-0 hover:bg-white hover:text-black">
-                    <ArrowUpRight className="h-5 w-5" />
-                  </div>
+                {/* Circular Arrow Button - Fades in and scales up */}
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white opacity-0 scale-50 transition-all duration-500 delay-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-white hover:text-black">
+                  <ArrowUpRight className="h-6 w-6" />
                 </div>
-
-                {/* Animated Expanding Divider Line */}
-                <div className="w-12 h-1 bg-white/30 rounded-full mt-6 transition-all duration-700 ease-in-out group-hover:w-full group-hover:bg-white" />
               </div>
             </div>
           ))}
@@ -170,9 +131,9 @@ function SocialButton({ icon: Icon, href, delay }: { icon: React.ElementType; hr
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`flex h-11 w-11 items-center justify-center rounded-full bg-black/20 backdrop-blur-xl border border-white/20 text-white shadow-2xl opacity-0 translate-x-8 group-hover:opacity-100 group-hover:translate-x-0 hover:bg-white hover:text-black hover:scale-110 transition-all duration-500 ease-out ${delay}`}
+      className={`flex h-12 w-12 items-center justify-center rounded-full bg-black/40 backdrop-blur-xl border border-white/20 text-white shadow-2xl hover:bg-white hover:text-black hover:scale-110 transition-all duration-500 ease-out ${delay}`}
     >
-      <Icon className="h-[18px] w-[18px]" />
+      <Icon className="h-5 w-5" />
     </a>
   );
 }

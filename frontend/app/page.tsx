@@ -3,6 +3,7 @@ import Hero from "@/components/sections/Hero";
 import Introduction from "@/components/sections/Introduction";
 import WhyChooseUs from "@/components/sections/WhyChooseUs";
 import Contact from "@/components/sections/Contact";
+import Teams from "@/components/sections/Teams";
 import Footer from "@/components/sections/Footer";
 
 export default function Home() {
@@ -12,6 +13,7 @@ export default function Home() {
       <Hero />
       <Introduction />
       <WhyChooseUs />
+      <Teams />
       <Contact />
       <Footer />
     </main>

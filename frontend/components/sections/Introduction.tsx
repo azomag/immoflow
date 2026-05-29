@@ -70,7 +70,7 @@ export default function Introduction() {
                   <Icon className="h-6 w-6" />
                 </div>
                 <p className="mb-3 font-mono text-xs uppercase tracking-[0.22em] text-secondary">
-                  {card.metric}
+                  {card.subtitle}
                 </p>
                 <h3 className="mb-4 text-2xl font-heading font-semibold text-foreground">
                   {card.title}

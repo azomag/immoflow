@@ -1,16 +1,27 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import {
+  Bath,
+  BedDouble,
+  Building2,
   CalendarClock,
+  CarFront,
+  ChevronLeft,
   CircleHelp,
   Download,
   Eye,
   FileSignature,
+  Flame,
   Home,
+  Layers3,
   LogOut,
+  Mail,
+  MapPin,
+  Ruler,
+  Search,
   X,
 } from "lucide-react";
 import { gsap } from "gsap";
@@ -27,11 +38,16 @@ import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
+  buildPropertySnapshot,
   formatLongDate,
   formatMoney,
   formatShortDate,
   initials,
+  propertyDisplaySubtitle,
+  propertyDisplayTitle,
+  type PropertySnapshot,
   toneForStatus,
 } from "@/components/dashboard/workspace-utils";
 
@@ -47,7 +63,7 @@ type LocataireWorkspaceProps = {
   initialTab?: TenantTab;
 };
 
-type TenantTab = "dashboard" | "documents" | "payments" | "notifications" | "profile";
+type TenantTab = "dashboard" | "properties" | "documents" | "payments" | "notifications" | "profile";
 
 function sortByNewest<T extends { date_paiement?: string; date_debut?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
@@ -72,7 +88,8 @@ export function LocataireWorkspace({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [propertyDetailsOpen, setPropertyDetailsOpen] = useState(false);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
+  const [propertySearch, setPropertySearch] = useState("");
   const [contractDetailsOpen, setContractDetailsOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -98,10 +115,61 @@ export function LocataireWorkspace({
   const documentContract = activeContract ?? pendingContract;
   const documentProperty =
     logements.find((logement) => logement.id === documentContract?.logement.id) ?? currentResidence;
+  const highlightedResidence = currentResidence ?? documentProperty;
+  const propertySnapshots = useMemo(
+    () => logements.map((logement) => buildPropertySnapshot(logement, contrats, paiements)),
+    [contrats, logements, paiements],
+  );
+  const selectedProperty =
+    propertySnapshots.find((snapshot) => snapshot.logement.id === selectedPropertyId) ?? null;
+
+  const visibleProperties = useMemo(() => {
+    const search = propertySearch.trim().toLowerCase();
+
+    return [...propertySnapshots]
+      .sort((left, right) => right.logement.id - left.logement.id)
+      .filter((property) => {
+        const logement = property.logement;
+        if (!search) {
+          return true;
+        }
+
+        return [
+          propertyDisplayTitle(logement),
+          propertyDisplaySubtitle(logement),
+          logement.adresse,
+          logement.commune?.nom,
+          logement.type_logement?.nom_type,
+          logement.loyer,
+          logement.statut_publication,
+          property.status,
+          property.ref,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+      });
+  }, [propertySearch, propertySnapshots]);
+
+  const dashboardProperties = visibleProperties.slice(0, 6);
 
   const latestPayment = sortedPayments[0] ?? null;
   const pendingPayment =
     sortedPayments.find((paiement) => ["pending", "awaiting_tenant_approval"].includes(paiement.statut.toLowerCase())) ?? null;
+  const tenantTabs = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "properties", label: "Properties" },
+    { id: "documents", label: "Documents" },
+    { id: "payments", label: "Payments" },
+    { id: "notifications", label: "Messages" },
+    { id: "profile", label: "Profile" },
+  ] as const;
+
+  function openPropertyDetails(logementId: number) {
+    setSelectedPropertyId(logementId);
+    setActiveTab("properties");
+  }
 
   useEffect(() => {
     if (!pageRef.current) {
@@ -164,7 +232,7 @@ export function LocataireWorkspace({
     }
   }
 
-  function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>) {
+  function getCanvasPoint(event: PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) {
       return { x: 0, y: 0 };
@@ -302,13 +370,7 @@ export function LocataireWorkspace({
             </div>
 
             <nav className="hidden items-center gap-8 md:flex">
-              {[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "documents", label: "Documents" },
-                { id: "payments", label: "Payments" },
-                { id: "notifications", label: "Messages" },
-                { id: "profile", label: "Profile" },
-              ].map((item) => (
+              {tenantTabs.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -341,6 +403,22 @@ export function LocataireWorkspace({
             <AvatarMenu user={user} onProfile={() => setActiveTab("profile")} />
           </div>
         </div>
+        <nav className="scrollbar-hide flex gap-2 overflow-x-auto border-t border-[var(--border)] px-4 py-2 md:hidden">
+          {tenantTabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveTab(item.id)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === item.id
+                  ? "bg-[var(--primary)] text-white"
+                  : "bg-white text-[var(--muted-foreground)]"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
       <main ref={pageRef} className="mx-auto max-w-[1440px] px-6 py-10 md:px-8">
@@ -427,21 +505,26 @@ export function LocataireWorkspace({
               <div className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Current Residence</div>
               <div className="rounded-3xl border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-sm)]">
                 <div className="grid gap-6 md:grid-cols-[240px_minmax(0,1fr)_80px] md:items-center">
-                  <div className="min-h-[155px] rounded-2xl bg-[radial-gradient(circle_at_20%_18%,rgba(1,73,124,0.1),transparent_22%),linear-gradient(135deg,rgba(1,73,124,0.05),rgba(44,125,160,0.05)_65%,rgba(1,73,124,0.1))]" />
+                  <PropertyImage logement={highlightedResidence} className="min-h-[155px]" />
                   <div>
                     <div className="text-[19px] font-bold text-[var(--foreground)]">
-                      {currentResidence?.adresse ?? activeContract?.logement.adresse ?? "No active residence"}
+                      {highlightedResidence?.adresse ?? activeContract?.logement.adresse ?? "No active residence"}
                     </div>
                     <div className="mt-2 text-[15px] text-[var(--muted-foreground)]">
-                      {currentResidence
-                        ? `${currentResidence.commune.nom}, ${currentResidence.type_logement.nom_type}`
+                      {highlightedResidence
+                        ? `${highlightedResidence.commune.nom}, ${highlightedResidence.type_logement.nom_type}`
                         : "The dashboard will update automatically once a property is attached to your contract."}
                     </div>
                     <div className="mt-5 flex flex-wrap items-center gap-6 text-[14px] font-medium">
                       <button type="button" className="text-[var(--primary)] hover:underline underline-offset-4" onClick={() => setContractDetailsOpen(true)}>
                         View contract
                       </button>
-                      <button type="button" className="text-[var(--primary)] hover:underline underline-offset-4" onClick={() => setPropertyDetailsOpen(true)}>
+                      <button
+                        type="button"
+                        className="text-[var(--primary)] hover:underline underline-offset-4"
+                        onClick={() => highlightedResidence && openPropertyDetails(highlightedResidence.id)}
+                        disabled={!highlightedResidence}
+                      >
                         View property
                       </button>
                       {activeContract ? (
@@ -460,6 +543,36 @@ export function LocataireWorkspace({
                   <div className="text-center text-5xl text-[var(--muted-foreground)] opacity-20">⌂</div>
                 </div>
               </div>
+            </section>
+
+            <section>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Available Properties</div>
+                  <div className="mt-1 text-sm text-[var(--muted-foreground)]">{logements.length} properties loaded from the agency catalog.</div>
+                </div>
+                <Button variant="outline" className="rounded-2xl" onClick={() => setActiveTab("properties")}>
+                  <Building2 className="h-4 w-4" />
+                  View all
+                </Button>
+              </div>
+
+              {dashboardProperties.length > 0 ? (
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {dashboardProperties.map((logement) => (
+                    <PropertyCard
+                      key={logement.logement.id}
+                      property={logement}
+                      onOpen={() => openPropertyDetails(logement.logement.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No properties found"
+                  description="Properties created by agents will appear here once the catalog is available."
+                />
+              )}
             </section>
 
             <section>
@@ -522,6 +635,55 @@ export function LocataireWorkspace({
               </div>
             </footer>
           </div>
+        ) : null}
+
+        {activeTab === "properties" && !selectedProperty ? (
+          <div className="space-y-6" data-animate="section">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="text-[36px] font-semibold tracking-tight">Properties</h1>
+                <p className="mt-2 max-w-2xl text-black/55">
+                  Browse every property loaded for your tenant account and open details before contacting the assigned agent.
+                </p>
+              </div>
+              <div className="relative w-full lg:w-[360px]">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <Input
+                  value={propertySearch}
+                  onChange={(event) => setPropertySearch(event.target.value)}
+                  className="pl-11"
+                  placeholder="Search address, city, type..."
+                />
+              </div>
+            </div>
+
+            {visibleProperties.length > 0 ? (
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {visibleProperties.map((logement) => (
+                  <PropertyCard
+                    key={logement.logement.id}
+                    property={logement}
+                    onOpen={() => openPropertyDetails(logement.logement.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No matching properties"
+                description="Try another search term or clear the search field."
+              />
+            )}
+          </div>
+        ) : null}
+
+        {activeTab === "properties" && selectedProperty ? (
+          <PropertyDetailPage
+            property={selectedProperty}
+            onBack={() => setSelectedPropertyId(null)}
+            onContactAgent={() => {
+              window.location.href = `mailto:${selectedProperty.logement.agent.user.email}`;
+            }}
+          />
         ) : null}
 
         {activeTab === "documents" ? (
@@ -646,36 +808,6 @@ export function LocataireWorkspace({
           <ProfilePanel token={token} user={user} onSaved={reload} />
         ) : null}
       </main>
-      {propertyDetailsOpen ? (
-        <TenantModal title="Property details" onClose={() => setPropertyDetailsOpen(false)}>
-          <div className="space-y-5">
-            <div className="overflow-hidden rounded-[22px] bg-[#f6f6f4]">
-              {documentProperty?.images?.[0] ? (
-                <img src={documentProperty.images[0]} alt={documentProperty.adresse} className="h-56 w-full object-cover" />
-              ) : (
-                <div className="flex h-56 items-center justify-center text-black/35">
-                  <Home className="h-10 w-10" />
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="text-2xl font-semibold">{documentProperty?.adresse ?? documentContract?.logement.adresse ?? "No property"}</div>
-              <div className="mt-2 text-black/55">
-                {documentProperty ? `${documentProperty.commune.nom} • ${documentProperty.type_logement.nom_type}` : "Property details are limited until the record is loaded."}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <DetailItem label="Rent" value={`${formatMoney(documentContract?.montant ?? documentProperty?.loyer ?? "0")} MAD`} />
-              <DetailItem label="Area" value={documentProperty ? `${documentProperty.superficie} m²` : "Not set"} />
-              <DetailItem label="Bedrooms" value={String(documentProperty?.chambres ?? "Not set")} />
-              <DetailItem label="Bathrooms" value={String(documentProperty?.salles_bain ?? "Not set")} />
-              <DetailItem label="Floor" value={documentProperty?.etage ?? "Not set"} />
-              <DetailItem label="Parking" value={documentProperty?.parking ? "Included" : "Not included"} />
-            </div>
-            <p className="leading-7 text-black/60">{documentProperty?.description ?? "No description has been added for this property yet."}</p>
-          </div>
-        </TenantModal>
-      ) : null}
       {contractDetailsOpen ? (
         <TenantModal title="Contract details" onClose={() => setContractDetailsOpen(false)}>
           {documentContract ? (
@@ -762,7 +894,267 @@ export function LocataireWorkspace({
   );
 }
 
-function TenantModal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function PropertyImage({ logement, className = "" }: { logement: Logement | null; className?: string }) {
+  const image = logement?.images?.[0];
+
+  return (
+    <div className={`overflow-hidden rounded-2xl bg-[#f6f6f4] ${className}`}>
+      {image && logement ? (
+        <img src={image} alt={logement.adresse} className="h-full min-h-[155px] w-full object-cover" />
+      ) : (
+        <div className="flex h-full min-h-[155px] items-center justify-center text-black/35">
+          <Home className="h-10 w-10" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PropertyCard({ property, onOpen }: { property: PropertySnapshot; onOpen: () => void }) {
+  const { logement } = property;
+
+  return (
+    <article className="overflow-hidden rounded-[28px] border border-[var(--border)] bg-white shadow-[var(--shadow-sm)] card-lift">
+      <PropertyImage logement={logement} className="h-48 rounded-none" />
+      <div className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-bold text-[var(--foreground)]">{propertyDisplayTitle(logement)}</h3>
+            <div className="mt-1 flex items-center gap-1 text-sm text-[var(--muted-foreground)]">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{propertyDisplaySubtitle(logement) || logement.commune.nom}</span>
+            </div>
+          </div>
+          <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="rounded-2xl bg-[var(--muted)] px-3 py-2">
+            <div className="font-bold">{formatMoney(logement.loyer)}</div>
+            <div className="text-xs text-[var(--muted-foreground)]">MAD/mo</div>
+          </div>
+          <div className="rounded-2xl bg-[var(--muted)] px-3 py-2">
+            <div className="flex items-center gap-1 font-bold"><BedDouble className="h-3.5 w-3.5" />{logement.chambres ?? "-"}</div>
+            <div className="text-xs text-[var(--muted-foreground)]">Beds</div>
+          </div>
+          <div className="rounded-2xl bg-[var(--muted)] px-3 py-2">
+            <div className="flex items-center gap-1 font-bold"><Bath className="h-3.5 w-3.5" />{logement.salles_bain ?? "-"}</div>
+            <div className="text-xs text-[var(--muted-foreground)]">Baths</div>
+          </div>
+        </div>
+
+        <Button variant="outline" className="w-full rounded-2xl" onClick={onOpen}>
+          <Eye className="h-4 w-4" />
+          View details
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function PropertyDetailPage({
+  property,
+  onBack,
+  onContactAgent,
+}: {
+  property: PropertySnapshot;
+  onBack: () => void;
+  onContactAgent: () => void;
+}) {
+  const contract = property.activeContract ?? property.latestContract;
+
+  return (
+    <section className="space-y-6" data-animate="section">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-2 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to properties
+      </button>
+
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 max-w-4xl">
+          <h1 className="line-clamp-2 text-2xl font-bold tracking-tight text-[var(--foreground)] sm:text-3xl">
+            {propertyDisplayTitle(property.logement)}
+          </h1>
+          {propertyDisplaySubtitle(property.logement) ? (
+            <p className="mt-2 line-clamp-2 max-w-3xl text-sm font-medium leading-6 text-[var(--muted-foreground)]">
+              {propertyDisplaySubtitle(property.logement)}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--muted-foreground)]">
+            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[var(--foreground)]">
+              {property.logement.type_logement.nom_type}
+            </span>
+            <span>Ref: {property.ref}</span>
+          </div>
+        </div>
+
+        <Button variant="outline" className="rounded-xl bg-white shadow-sm" onClick={onContactAgent}>
+          <Mail className="mr-2 h-4 w-4" />
+          Contact Agent
+        </Button>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
+          <div className="group relative w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-slate-100 shadow-sm">
+            <div className="aspect-[16/9] w-full md:aspect-[21/9]">
+              {property.logement.images?.[0] ? (
+                <img
+                  src={property.logement.images[0]}
+                  alt={property.logement.adresse}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-[var(--muted-foreground)]">No image available</div>
+              )}
+            </div>
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+            <div className="pointer-events-none absolute bottom-6 left-6 text-white">
+              <Badge variant={toneForStatus(property.status)} className="mb-3 shadow-lg">{property.status}</Badge>
+              <div className="text-3xl font-bold tracking-tight">{property.logement.type_logement.nom_type}</div>
+              <div className="mt-1 text-white/75">Ref: {property.ref}</div>
+            </div>
+          </div>
+
+          {property.logement.images && property.logement.images.length > 1 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {property.logement.images.slice(1, 5).map((image, idx) => (
+                <div
+                  key={`${image}-${idx}`}
+                  className="relative aspect-square overflow-hidden rounded-xl border border-[var(--border)] shadow-sm"
+                >
+                  <img src={image} className="h-full w-full object-cover" alt="Property view" />
+                  {idx === 3 && property.logement.images!.length > 5 ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-lg font-bold text-white backdrop-blur-sm">
+                      +{property.logement.images!.length - 5}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <MetricCard label="Area" value={`${property.logement.superficie} m²`} />
+            <MetricCard label="Rent" value={`${formatMoney(property.logement.loyer)} MAD`} />
+            <MetricCard label="Payments" value={String(property.paymentCount)} />
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Status</div>
+              <div className="mt-2">
+                <Badge variant={toneForStatus(property.status)}>{property.status}</Badge>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--foreground)]">Property Details</h3>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { label: "Bedrooms", value: property.logement.chambres ?? "Not set", icon: BedDouble },
+                { label: "Bathrooms", value: property.logement.salles_bain ?? "Not set", icon: Bath },
+                { label: "Floor", value: property.logement.etage ?? "Not set", icon: Layers3 },
+                { label: "Heating", value: property.logement.chauffage ?? "Not set", icon: Flame },
+                { label: "Area", value: `${property.logement.superficie} m²`, icon: Ruler },
+                { label: "Parking", value: property.logement.parking ? "Included" : "None", icon: CarFront },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-slate-50/50 p-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[var(--primary)] shadow-sm">
+                    <item.icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{item.label}</div>
+                    <div className="text-sm font-semibold text-[var(--foreground)]">{item.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-xl border border-[var(--border)] bg-slate-50/50 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Description</div>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--foreground)]">
+                {property.logement.description || "No detailed description provided for this property."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-6">
+          <div className="rounded-2xl border border-[var(--border)] bg-slate-900 p-6 text-white shadow-lg">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Monthly Rent</div>
+            <div className="mt-2 text-4xl font-bold tracking-tight">
+              {formatMoney(property.logement.loyer)}
+              <span className="ml-2 text-lg font-medium text-white/60">MAD</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Assigned Agent</div>
+            <div className="mt-4 flex items-center gap-4">
+              <Avatar className="h-14 w-14 border border-[var(--border)]">
+                <AvatarFallback className="text-lg">{initials(property.logement.agent.user.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-lg font-bold text-[var(--foreground)]">{property.logement.agent.user.name}</div>
+                <div className="truncate text-sm text-[var(--muted-foreground)]">{property.logement.agent.user.email}</div>
+              </div>
+            </div>
+            <Button variant="outline" className="mt-5 w-full rounded-xl" onClick={onContactAgent}>
+              <Mail className="mr-2 h-4 w-4" />
+              Contact Agent
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Contract Details</div>
+              {property.activeContract ? <Badge variant="success" className="shadow-sm">Active</Badge> : null}
+            </div>
+
+            {contract ? (
+              <div className="space-y-3 text-sm">
+                <DetailRow label="Tenant" value={contract.locataire.user.name} />
+                <DetailRow label="Starts" value={formatShortDate(contract.date_debut)} />
+                <DetailRow label="Ends" value={formatShortDate(contract.date_fin, "Open")} />
+                <DetailRow label="Signature" value={contract.signature_status} />
+              </div>
+            ) : (
+              <div className="rounded-xl bg-slate-50 p-4 text-center text-sm text-[var(--muted-foreground)]">
+                No active lease agreement for this property.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{label}</div>
+      <div className="mt-1 text-xl font-bold text-[var(--foreground)]">{value}</div>
+    </div>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-[28px] border border-dashed border-[var(--border-strong)] bg-white p-10 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
+        <Building2 className="h-6 w-6" />
+      </div>
+      <div className="mt-4 text-lg font-semibold text-[var(--foreground)]">{title}</div>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">{description}</p>
+    </div>
+  );
+}
+
+function TenantModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-[28px] bg-white shadow-[0_30px_90px_rgba(0,0,0,0.28)]">
@@ -774,15 +1166,6 @@ function TenantModal({ title, children, onClose }: { title: string; children: Re
         </div>
         <div className="max-h-[calc(90vh-76px)] overflow-y-auto p-6">{children}</div>
       </div>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-[#f6f6f4] p-4">
-      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/35">{label}</div>
-      <div className="mt-2 font-semibold">{value}</div>
     </div>
   );
 }

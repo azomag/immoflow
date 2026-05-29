@@ -58,6 +58,12 @@ class LogementController extends Controller
             $query->where('agent_id', $user->agentProfile?->id);
         }
 
+        if ($user->role === 'locataire') {
+            $query->whereHas('contrats', function ($contractQuery) use ($user): void {
+                $contractQuery->where('locataire_id', $user->locataireProfile?->id);
+            });
+        }
+
         return response()->json([
             'logements' => $query->latest()->get(),
         ]);

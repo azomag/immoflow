@@ -116,9 +116,15 @@ export function LocataireWorkspace({
   const documentProperty =
     logements.find((logement) => logement.id === documentContract?.logement.id) ?? currentResidence;
   const highlightedResidence = currentResidence ?? documentProperty;
+  const tenantPropertyIds = useMemo(
+    () => new Set(contrats.map((contrat) => contrat.logement.id)),
+    [contrats],
+  );
   const propertySnapshots = useMemo(
-    () => logements.map((logement) => buildPropertySnapshot(logement, contrats, paiements)),
-    [contrats, logements, paiements],
+    () => logements
+      .filter((logement) => tenantPropertyIds.has(logement.id))
+      .map((logement) => buildPropertySnapshot(logement, contrats, paiements)),
+    [contrats, logements, paiements, tenantPropertyIds],
   );
   const selectedProperty =
     propertySnapshots.find((snapshot) => snapshot.logement.id === selectedPropertyId) ?? null;
